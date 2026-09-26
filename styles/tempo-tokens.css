@@ -1,0 +1,89 @@
+/*
+ * Tempo design tokens — calm, editorial fitness-coach interface.
+ * Dependency-free: works with plain CSS, CSS Modules, Tailwind layers or a component library.
+ * Add `tempo-theme` to the app root.
+ */
+
+:root {
+  /* Surfaces */
+  --tempo-paper: #f6f6f0;
+  --tempo-surface: #fafbf6;
+  --tempo-surface-strong: #fdfdf9;
+  --tempo-surface-muted: #f0f2e8;
+
+  /* Text */
+  --tempo-ink: #303a32;
+  --tempo-ink-soft: #536348;
+  --tempo-muted: #8a8c80;
+  --tempo-line: #e4e6dc;
+
+  /* Accents */
+  --tempo-coral: #d56b47;
+  --tempo-coral-dark: #c7613f;
+  --tempo-sage: #536e58;
+  --tempo-amber: #b39860;
+  --tempo-amber-soft: #f4eedf;
+
+  /* Memory tiers: warm cream/peach, cool pale blue-green, pale sage */
+  --tempo-core: #c07a58;
+  --tempo-core-soft: #f8ede3;
+  --tempo-goal: #4f8580;
+  --tempo-goal-soft: #e6f0ed;
+  --tempo-moment: #62805a;
+  --tempo-moment-soft: #eaf0e3;
+
+  /* Type */
+  --tempo-serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --tempo-sans: Arial, "Helvetica Neue", Helvetica, sans-serif;
+
+  /* Shape */
+  --tempo-radius-control: 5px;
+  --tempo-radius-card: 8px;
+  --tempo-radius-panel: 14px;
+}
+
+.tempo-theme {
+  background: var(--tempo-paper);
+  color: var(--tempo-ink);
+  font-family: var(--tempo-sans);
+}
+
+/* Large editorial headings: serif, regular weight, tight tracking. */
+.tempo-display {
+  font-family: var(--tempo-serif);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--tempo-ink);
+}
+
+/* Small uppercase interface labels. */
+.tempo-eyebrow {
+  font-family: var(--tempo-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tempo-muted);
+}
+
+.tempo-card {
+  background: var(--tempo-surface-strong);
+  border: 1px solid var(--tempo-line);
+  border-radius: var(--tempo-radius-panel);
+}
+
+/* The single high-attention action on a screen. */
+.tempo-button-primary {
+  background: var(--tempo-coral);
+  color: #fff;
+  border-radius: var(--tempo-radius-control);
+  font-weight: 600;
+  transition: background-color 0.15s, transform 0.1s;
+}
+.tempo-button-primary:hover {
+  background: var(--tempo-coral-dark);
+}
+.tempo-button-primary:active {
+  transform: translateY(1px);
+}

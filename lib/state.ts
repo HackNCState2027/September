@@ -2,7 +2,7 @@ import { getDb, getStateValue } from "./db";
 import { localDate, simNow, simOffsetDays } from "./clock";
 import { liveMemories, resolvedMemories, toView } from "./memoryEngine";
 import { allMessages } from "./messages";
-import { latestDate } from "./tools";
+import { latestDate, todaySnapshot } from "./tools";
 import { userName } from "./coach";
 import type { AppState } from "./types";
 
@@ -10,6 +10,7 @@ export function getAppState(): AppState {
   const db = getDb();
   const now = simNow();
   return {
+    today: todaySnapshot(),
     simDate: localDate(now),
     simOffsetDays: simOffsetDays(),
     userName: userName(),

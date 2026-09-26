@@ -2,16 +2,34 @@
 
 import { motion } from "motion/react";
 import type { Chip, Message } from "@/lib/types";
+import { LookBackIcon, TempoMark, TierIcon } from "./Icons";
 import MiniChart from "./MiniChart";
 import { stripTags, TIER_META } from "./tiers";
 
 export type UIMessage = Message & { streaming?: boolean };
 
-export default function MessageBubble({ msg }: { msg: UIMessage }) {
+const EASE = [0.22, 1, 0.36, 1] as const;
+
+export default function MessageBubble({
+  msg,
+  onHoverMemory,
+  quickReplies,
+  onQuickReply,
+}: {
+  msg: UIMessage;
+  onHoverMemory: (id: number | null) => void;
+  quickReplies?: string[];
+  onQuickReply?: (text: string) => void;
+}) {
   if (msg.role === "user") {
     return (
-      <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="flex justify-end">
-        <div className="max-w-[80%] rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-[15px] leading-relaxed text-white">
+      <motion.div
+        initial={{ opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: EASE }}
+        className="flex justify-end"
+      >
+        <div className="max-w-[78%] rounded-card rounded-br-[3px] bg-ink px-4 py-2.5 text-[14px] leading-[1.7] text-surface-strong">
           {msg.text}
         </div>
       </motion.div>
@@ -20,74 +38,97 @@ export default function MessageBubble({ msg }: { msg: UIMessage }) {
 
   const text = stripTags(msg.text);
   const chart = msg.tool_calls.find((t) => t.chart)?.chart;
+  const checkin = msg.kind === "checkin";
 
   return (
-    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3">
-      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink text-sm text-white">
-        C
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: EASE }}
+      className="flex gap-3"
+    >
+      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line bg-surface-strong">
+        <TempoMark size={18} />
       </div>
-      <div className="max-w-[85%] min-w-0">
-        {msg.kind === "checkin" && (
-          <div className="mb-1 inline-flex items-center gap-1 rounded-full bg-warn-soft px-2 py-0.5 text-[11px] font-semibold text-warn">
-            💬 Coach checked in on its own
-          </div>
-        )}
+      <div className="max-w-[86%] min-w-0">
+        {checkin && <div className="tempo-eyebrow mb-1.5 !text-amber">Check-in · your coach reached out</div>}
         <div
-          className={`rounded-2xl rounded-tl-md border bg-panel px-4 py-3 text-[15px] leading-relaxed ${
-            msg.kind === "checkin" ? "border-warn" : "border-line"
-          }`}
+          className="rounded-card rounded-tl-[3px] border bg-surface-strong px-4 py-3 text-[14px] leading-[1.8] text-ink"
+          style={{ borderColor: checkin ? "var(--tempo-amber)" : "var(--tempo-line)" }}
         >
           {msg.streaming &&
             msg.tool_calls.map((t, i) => (
-              <div key={i} className="mb-1.5 flex items-center gap-1.5 text-xs text-muted">
-                <span>🔎</span> fetching {t.label}…
+              <div key={i} className="mb-1.5 flex items-center gap-1.5 text-[11px] text-sage">
+                <LookBackIcon size={13} /> Looking back: {t.label}…
               </div>
             ))}
-          {text ? <RichText text={text} /> : msg.streaming ? <Typing /> : null}
+          {text ? (
+            <RichText text={text} />
+          ) : msg.streaming ? (
+            <div className="flex gap-1 py-2" role="status" aria-label="Your coach is writing">
+              {[0, 1, 2].map((i) => (
+                <span key={i} className="typing-dot h-1.5 w-1.5 rounded-full bg-sage" />
+              ))}
+            </div>
+          ) : null}
           {chart && !msg.streaming && <MiniChart chart={chart} />}
         </div>
+
         {!msg.streaming && msg.chips.length > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] text-muted">Based on</span>
+            <span className="tempo-eyebrow mr-0.5 !text-[9px]">Based on</span>
             {msg.chips.map((c, i) => (
-              <ChipView key={i} chip={c} i={i} />
+              <ChipView key={i} chip={c} onHoverMemory={onHoverMemory} />
             ))}
           </div>
+        )}
+
+        {quickReplies && onQuickReply && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.3, ease: EASE }}
+            className="mt-2.5 flex flex-wrap gap-2"
+          >
+            {quickReplies.map((r) => (
+              <button
+                key={r}
+                onClick={() => onQuickReply(r)}
+                className="tempo-press rounded-control border border-sage bg-surface-strong px-3 py-1.5 text-[12px] font-semibold text-sage hover:bg-sage hover:text-surface-strong"
+              >
+                {r}
+              </button>
+            ))}
+          </motion.div>
         )}
       </div>
     </motion.div>
   );
 }
 
-function ChipView({ chip, i }: { chip: Chip; i: number }) {
-  const style =
-    chip.kind === "memory"
-      ? { background: TIER_META[chip.tier].soft, color: TIER_META[chip.tier].color }
-      : { background: "var(--line)", color: "var(--ink)" };
-  const label =
-    chip.kind === "memory"
-      ? `${TIER_META[chip.tier].icon} ${chip.label}${chip.daysLeft != null ? ` · ${chip.daysLeft}d left` : ""}`
-      : `📊 ${chip.label}`;
+function ChipView({ chip, onHoverMemory }: { chip: Chip; onHoverMemory: (id: number | null) => void }) {
+  if (chip.kind === "data") {
+    return (
+      <span className="rounded-control border border-line bg-surface-strong px-2 py-0.5 text-[11px] text-ink-soft">
+        {chip.label === "today" ? "Today’s health snapshot" : chip.label}
+      </span>
+    );
+  }
+  const meta = TIER_META[chip.tier];
   return (
-    <motion.span
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ delay: 0.08 * i }}
-      className="rounded-full px-2.5 py-1 text-xs font-medium"
-      style={style}
+    <span
+      onMouseEnter={() => onHoverMemory(chip.id)}
+      onMouseLeave={() => onHoverMemory(null)}
+      className="inline-flex cursor-default items-center gap-1 rounded-control px-2 py-0.5 text-[11px] text-ink"
+      style={{ background: meta.soft }}
+      title="Highlight this memory on the board"
     >
-      {label}
-    </motion.span>
-  );
-}
-
-function Typing() {
-  return (
-    <div className="flex gap-1 py-1.5">
-      {[0, 1, 2].map((i) => (
-        <span key={i} className="typing-dot h-1.5 w-1.5 rounded-full bg-muted" />
-      ))}
-    </div>
+      <span style={{ color: meta.color }}>
+        <TierIcon tier={chip.tier} size={11} />
+      </span>
+      {chip.label}
+      {chip.daysLeft != null && <span className="text-muted">· {chip.daysLeft}d left</span>}
+    </span>
   );
 }
 
@@ -95,12 +136,12 @@ function Typing() {
 function RichText({ text }: { text: string }) {
   const blocks = text.trim().split(/\n{2,}/);
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       {blocks.map((block, i) => {
         const lines = block.split("\n");
         if (lines.every((l) => /^\s*[-*•]\s+/.test(l))) {
           return (
-            <ul key={i} className="list-disc space-y-1 pl-5">
+            <ul key={i} className="list-disc space-y-1 pl-5 marker:text-sage">
               {lines.map((l, j) => (
                 <li key={j}>{bold(l.replace(/^\s*[-*•]\s+/, ""))}</li>
               ))}
@@ -125,7 +166,7 @@ function RichText({ text }: { text: string }) {
 function bold(line: string) {
   return line.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
     part.startsWith("**") && part.endsWith("**") ? (
-      <strong key={i} className="font-semibold">
+      <strong key={i} className="font-semibold text-ink">
         {part.slice(2, -2)}
       </strong>
     ) : (

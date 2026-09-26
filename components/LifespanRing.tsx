@@ -5,21 +5,23 @@ import { motion } from "motion/react";
 export default function LifespanRing({
   strength,
   color,
+  label,
   size = 34,
   children,
 }: {
   strength: number;
   color: string;
+  label: string;
   size?: number;
   children?: React.ReactNode;
 }) {
-  const stroke = 3.5;
+  const stroke = 2.5;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--line)" strokeWidth={stroke} />
+    <div className="relative shrink-0" style={{ width: size, height: size, color }} role="img" aria-label={label}>
+      <svg width={size} height={size} className="-rotate-90" aria-hidden>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--tempo-line)" strokeWidth={stroke} />
         <motion.circle
           cx={size / 2}
           cy={size / 2}
@@ -34,7 +36,7 @@ export default function LifespanRing({
           transition={{ duration: 0.9, ease: "easeInOut" }}
         />
       </svg>
-      <div className="absolute inset-0 flex items-center justify-center text-[15px]">{children}</div>
+      <div className="absolute inset-0 flex items-center justify-center">{children}</div>
     </div>
   );
 }
