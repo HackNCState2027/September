@@ -29,10 +29,10 @@ It uses the user's **real Google Health data** (Fitbit / Pixel Watch) and **Gemi
 | # | Beat | Presenter does | Audience sees |
 |---|---|---|---|
 | 1 | Hook (20s) | Says the problem line | — |
-| 2 | Memory builds live (45s) | Types: *"Training for a half-marathon in November. I'm allergic to peanuts. Knee's been sore since Sunday's long run, and I slept terribly last night."* | 4 cards animate onto the board, each in the right tier with a lifespan ring: 🔒 peanut allergy · 🎯 half-marathon Nov · 🌊 sore knee · 🌊 bad sleep |
+| 2 | Memory builds live (45s) | Types: *"Training for a half-marathon in November. I'm allergic to peanuts. My knee's been sore since my last long run, and work has been super stressful this week."* | 4 cards animate onto the board, each in the right tier with a lifespan ring: 🔒 peanut allergy · 🎯 half-marathon Nov · 🌊 sore knee · 🌊 stressful week |
 | 3 | Advice that respects memory (45s) | *"What should I do today, and what should I eat after?"* | Upper-body/easy day instead of a run, a snack without peanuts. Chips: `🔒 peanut allergy` `🌊 sore knee` `🎯 half-marathon` `📊 today` |
 | 4 | Context zooms out (30s) | *"How's my sleep been lately?"* | Trace shows `fetching sleep · last 7 days…`, answer with real numbers + a mini chart |
-| 5 | Fast-forward (45s) | Clicks **⏩ +7 days** | Bad-sleep card fades away. Knee card pulses amber, **coach messages first**: *"How's the knee?"* Presenter types *"All good now"* → knee card gets ✓ and slides to history. 🔒 and 🎯 cards don't move. |
+| 5 | Fast-forward (45s) | Clicks **⏩ +7 days** | Stressful-week card fades away. Knee card pulses amber, **coach messages first**: *"How's the knee?"* Presenter types *"All good now"* → knee card gets ✓ and slides to history. 🔒 and 🎯 cards don't move. |
 | 6 | Close (10s) | Says the one-liner | — |
 
 **Real vs. staged**
@@ -119,8 +119,8 @@ It uses the user's **real Google Health data** (Fitbit / Pixel Watch) and **Gemi
   api/sync/route.ts         # POST: pull Google Health → daily_stats
   api/reset/route.ts        # POST: clear memories/messages, sim offset = 0
 /components
-  TopBar.tsx  Chat.tsx  MessageBubble.tsx  MemoryChips.tsx  ToolTrace.tsx  MiniChart.tsx
-  MemoryBoard.tsx  MemoryCard.tsx  LifespanRing.tsx
+  CoachApp.tsx              # page shell: top bar, chat, streaming, fast-forward staging
+  MessageBubble.tsx  MiniChart.tsx  MemoryBoard.tsx  LifespanRing.tsx  tiers.ts
 /lib
   db.ts                     # better-sqlite3 connection + schema bootstrap
   clock.ts                  # simNow() = real now + sim_offset_days
@@ -131,9 +131,12 @@ It uses the user's **real Google Health data** (Fitbit / Pixel Watch) and **Gemi
   memoryEngine.ts           # CATEGORY table, strength(), tick()
   checkin.ts                # generate check-in text
   googleHealth.ts           # token refresh, fetchers, mapping to daily_stats
+  messages.ts               # save/read chat messages
+  state.ts                  # assembles the AppState the page loads
+  sampleData.ts             # 30-day demo story (used on first run, Reset, and ?sample=1)
 /scripts
   google-auth.ts            # one-time OAuth → prints refresh token
-  seed-sample.ts            # generates 30 days of sample data (fallback)
+  gemini-spike.ts           # smoke test: memory builder + coach with tools
   gh-dump.ts                # dumps raw Google Health responses to /data/raw for mapping
 /data                       # app.db, raw/ (gitignored)
 .env.local
@@ -180,7 +183,7 @@ CREATE TABLE IF NOT EXISTS messages (
   role            TEXT NOT NULL,            -- 'user' | 'coach'
   kind            TEXT DEFAULT 'chat',      -- 'chat' | 'checkin'
   text            TEXT NOT NULL,            -- stored with [[m12]] tags; UI strips them
-  used_memory_ids TEXT,                     -- JSON array
+  chips_json      TEXT,                     -- JSON array of chips, snapshotted at answer time
   tool_calls_json TEXT,                     -- JSON array of {name, args, rows}
   created_at      TEXT NOT NULL             -- SIM time
 );
@@ -275,26 +278,25 @@ sleep 4h50 (deep 38m) · HRV 52 ms (7-day avg 60) · resting HR 57 · steps 3,10
 
 Note: memories created *in the same turn* can't be tagged (they don't have IDs yet). That's fine, because the user's own message already holds the fact.
 
-**SDK:** use `@google/genai`. The current docs show the **Interactions API** (`client.interactions.create({ model, input, tools, stream, response_format, previous_interaction_id })`, function calls come back as `function_call` steps, results are sent as `function_result`, and the SDK handles Gemini 3 thought signatures automatically). ⚠️ The field names for **system instruction** and **thinking level** weren't in the examples. Confirm them in the first-hour spike. If the Interactions API causes friction, `ai.models.generateContentStream` is an acceptable fallback.
+**SDK (confirmed against `@google/genai` 2.24 types):** Interactions API, `ai().interactions.create({ model, system_instruction, input, tools, generation_config: { thinking_level: "low" }, previous_interaction_id, stream: true })`. Chat history is sent as `user_input` / `model_output` steps. Stream events: `interaction.created`, `step.start` (a `function_call` or `model_output` step), `step.delta` (`text` or `arguments_delta`), `interaction.completed`. Tool results go back as `function_result` steps with `previous_interaction_id`. Structured output uses `response_format: { type: "text", mime_type: "application/json", schema }` and `interaction.output_text`. Still to verify with a real key: `npm run gemini:spike`.
 
 ### 8.4 Memory builder (②)
 
-**Model:** `MEMORY_MODEL` (default `gemini-3.8-flash`), **structured JSON output**, not streamed. It runs **in parallel** with the coach on every user message.
+**Model:** `MEMORY_MODEL` (default `gemini-3.8-flash`), **structured JSON output**, not streamed. It runs **before** the coach on every user message (~1.5–2 s). The board shows **🧠 Learning…**, the cards land, and then the coach answers. This makes the "learn, then use it" story visible, and it lets the coach cite memories created in the same turn.
 
 **Input:** current sim date · all non-faded memories `(id, tier, category, text, status)` · pending check-ins · the coach's previous message (so it can read a reply to a check-in) · the new user message.
 
-**Output schema:**
+**Output schema:** four lists, **every field required**. In live testing, a schema with optional fields made Gemini return `{"op":"create","tier":"goal"}` with no label and stop.
 ```json
 {
-  "actions": [
-    { "op": "create",  "tier": "core|goal|moment", "category": "injury|illness|travel|stress|poor_sleep|fatigue|other|null",
-      "text": "short label, <= 8 words", "end_date": "YYYY-MM-DD|null" },
-    { "op": "refresh", "memory_id": 4 },
-    { "op": "resolve", "memory_id": 4 },
-    { "op": "update",  "memory_id": 4, "text": "new label" }
-  ]
+  "create":  [{ "text": "short label", "tier": "core|goal|moment",
+                "category": "none|injury|illness|travel|stress|poor_sleep|fatigue|other", "end_date": "YYYY-MM-DD or \"\"" }],
+  "refresh": [4],
+  "resolve": [4],
+  "update":  [{ "memory_id": 4, "text": "new label" }]
 }
 ```
+Set `DEBUG_MEMORY=1` to log the raw output.
 
 **Prompt rules (summary):**
 - **core** = stable facts that must never be violated or forgotten: allergies, chronic conditions, medications, dietary rules, permanent injuries/surgeries.
@@ -338,7 +340,7 @@ Plain TypeScript. **The LLM picks the category; code decides the lifespan.** Thi
 | | `checkin` for > 3 sim days with no answer | `faded` |
 | goal / core | always | `active` |
 
-With the demo script, **+7 days** gives: bad sleep (2d) → faded; knee (injury, 7d) → check-in; goal + core → unchanged. ✅
+With the demo script, **+7 days** gives: stressful week (5d) → faded; knee (injury, 7d) → check-in; goal + core → unchanged. ✅
 
 ### 8.6 Check-in (⑥)
 
@@ -383,8 +385,8 @@ One page, two columns (~60/40), desktop only.
 
 **Chat turn**
 1. Client `POST /api/chat` → server saves user message (sim time) → `tick()`.
-2. In parallel: **memory builder** (→ `applyActions` → `memory` events) and **coach** (→ `tool` events → `text` deltas).
-3. Coach finishes → save message with `used_memory_ids` + `tool_calls_json` → `done`.
+2. `learning` event → **memory builder** (→ `applyActions` → `memory` events) → **coach** (→ `tool` events → `text` deltas).
+3. Coach finishes → save message with `chips_json` + `tool_calls_json` → `done`.
 4. Client strips tags, renders chips + chart; board has already updated from `memory` events.
 
 **Fast-forward**
@@ -409,7 +411,6 @@ GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GOOGLE_REFRESH_TOKEN=
 USER_NAME=Alex
-TZ=America/New_York
 ```
 
 ---
@@ -440,20 +441,32 @@ TZ=America/New_York
 
 ---
 
-## 12. Gaps found and how this doc resolves them
+## 12. Build status
+
+| Piece | Status |
+|---|---|
+| Next.js app, SQLite, sample data (auto-seeded on first run, regenerated on Reset) | ✅ built |
+| Memory engine: tiers, lifespans, fading, check-in trigger | ✅ built and tested without an LLM |
+| Memory board UI, lifespan rings, chips, trace, mini chart, fast-forward animation | ✅ built and checked in the browser |
+| Coach (streaming + tools) and memory builder (JSON) on Gemini | ✅ verified live: the full demo script plays end to end in the browser |
+| Check-in message | ✅ Gemini-written (verified), with a template fallback |
+| Google Health sync | ✅ verified with real data (Fitbit Air): 30 days of sleep, steps, resting HR, HRV, workouts. The API only has Fitbit/Pixel data (history from May 2026 here); older phone-only Google Fit history isn't available. The exercise type rejects filters, so it's filtered locally. |
+| Presenter helpers | Script buttons above the input fill in each demo line; double-click the data badge to load sample data |
+
+## 13. Gaps found and how this doc resolves them
 
 | # | Gap | Resolution |
 |---|---|---|
 | 1 | Team size / hours unknown | Plan split into 4 workstreams + milestones + cut list; merge streams for smaller teams |
 | 2 | Unknown whose watch/data we use | Sample data is first-class and built first; badge shows the source |
-| 3 | **Script vs. real data mismatch** (script says "Sunday's long run", "slept terribly"; real data may disagree) | Morning of demo: sync, look at the real last 7 days, **rewrite script lines to match reality**; or switch to sample data |
+| 3 | **Script vs. real data mismatch** (the original script said "slept terribly"; real data showed 7h52m) | Script changed to claims the data can't contradict ("last long run", "stressful week"). Still, on the morning of the demo: sync, look at the real last 7 days, **rewrite script lines to match reality**; or switch to sample data |
 | 4 | What "today" means after fast-forward | Health "today" = latest synced date; sim clock only ages memories |
 | 5 | LLM might pick a lifespan that breaks the +7-day beat | LLM picks a category; code owns lifespans (§8.5) |
 | 6 | Check-in must fire before a high-stakes memory vanishes | Check-in triggers at ≤30% strength *or* expiry; the memory can't fade until answered or 3 days pass |
 | 7 | Duplicate memories on repeated mentions | Builder sees existing memories; must `refresh`, not `create` |
 | 8 | How chips know what was used | Coach tags `[[mN]]` / `[[today]]`; tool calls add data chips |
-| 9 | Memories from the same turn can't be cited | Accepted; the user's own words cover it |
-| 10 | Board updates while the coach streams | Both run in one request; memory events share the SSE stream (no polling) |
+| 9 | Memories from the same turn can't be cited | Solved by learn-then-answer ordering |
+| 10 | Cards arrived *after* the coach's reply when run in parallel (the builder is slower) | Changed to learn-then-answer in one SSE stream, with a "🧠 Learning…" indicator (found in live testing) |
 | 11 | Demo classification might vary | Exact demo sentences are few-shot examples in the builder prompt |
 | 12 | Gemini SDK field names (system instruction, thinking level) not confirmed | Hour-0 spike S2 |
 | 13 | Google Health filter names / response shapes not confirmed | Hour-0 spike S3, map against saved raw JSON |
@@ -462,7 +475,7 @@ TZ=America/New_York
 
 ---
 
-## 13. Demo-day checklist
+## 14. Demo-day checklist
 
 - [ ] Sync Google Health that morning; check the badge and the last 7 days look sensible.
 - [ ] Adapt script lines to the real data (gap #3); do 3 full rehearsals with **Reset** between them.
