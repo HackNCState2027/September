@@ -1,5 +1,5 @@
 /**
- * One-time Google Health sign-in. Prints a refresh token to paste into .env.local.
+ * One-time Google Health sign-in. Saves the refresh token into .env.local.
  *
  *   npm run google:auth
  *
@@ -7,7 +7,9 @@
  * Google Cloud project with the Google Health API enabled and your account added as a test user.
  */
 import crypto from "node:crypto";
+import fs from "node:fs";
 import http from "node:http";
+import path from "node:path";
 import { SCOPES } from "../lib/googleHealth";
 
 const PORT = 8765;
@@ -60,8 +62,14 @@ const server = http.createServer(async (req, res) => {
     process.exit(1);
   }
   res.end("Done! You can close this tab.");
-  console.log("\nAdd this line to .env.local:\n");
-  console.log(`GOOGLE_REFRESH_TOKEN=${json.refresh_token}\n`);
+  const envPath = path.join(process.cwd(), ".env.local");
+  const env = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
+  const line = `GOOGLE_REFRESH_TOKEN=${json.refresh_token}`;
+  fs.writeFileSync(
+    envPath,
+    /^GOOGLE_REFRESH_TOKEN=.*$/m.test(env) ? env.replace(/^GOOGLE_REFRESH_TOKEN=.*$/m, line) : `${env.trimEnd()}\n${line}\n`,
+  );
+  console.log("\n✅ Saved GOOGLE_REFRESH_TOKEN to .env.local. Restart the dev server, then click Sync.\n");
   server.close();
 });
 
