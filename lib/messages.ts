@@ -5,7 +5,7 @@ import type { Chip, Message, ToolCallRecord } from "./types";
 type Row = {
   id: number;
   role: "user" | "coach";
-  kind: "chat" | "checkin";
+  kind: "chat" | "checkin" | "persona";
   text: string;
   chips_json: string | null;
   tool_calls_json: string | null;
@@ -26,7 +26,7 @@ function fromRow(r: Row): Message {
 
 export function saveMessage(input: {
   role: "user" | "coach";
-  kind?: "chat" | "checkin";
+  kind?: "chat" | "checkin" | "persona";
   text: string;
   chips?: Chip[];
   toolCalls?: ToolCallRecord[];

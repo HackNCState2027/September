@@ -4,15 +4,15 @@ import { liveMemories, toView } from "./memoryEngine";
 import { recentMessages } from "./messages";
 import { runTool, todaySummary, TOOL_DECLARATIONS } from "./tools";
 import type { Chip, Memory, MemoryView, ToolCallRecord } from "./types";
+import { getPersona } from "./persona";
+import { userName } from "./user";
 
 const HISTORY_MESSAGES = 12;
 const MAX_TOOL_ROUNDS = 3;
 
 export const TAG_RE = /\[\[?(m\d+|today)\]\]?/g;
 
-export function userName() {
-  return process.env.USER_NAME || "Alex";
-}
+export { userName } from "./user";
 
 function memoryLine(m: MemoryView) {
   const left = m.days_left != null ? ` (${m.days_left} day${m.days_left === 1 ? "" : "s"} left)` : "";
@@ -25,7 +25,12 @@ export function buildSystemPrompt(memories: Memory[]): string {
   const section = (title: string, list: MemoryView[]) =>
     `${title}\n${list.length ? list.map(memoryLine).join("\n") : "(none)"}`;
 
-  return `You are ${userName()}'s personal fitness coach. Be warm, direct and brief: 2-5 sentences, optionally a short bullet list. Talk like a real coach who knows them, not a textbook.
+  const persona = getPersona();
+  return `You are ${userName()}'s personal fitness coach. Talk like a real coach who knows them, not a textbook. Keep replies brief: 2-5 sentences, optionally a short bullet list.
+
+PERSONA: ${persona.name}
+Voice: ${persona.instruction}
+The persona only changes HOW you talk. It never changes the HARD RULES below, the facts in memory, or the quality and safety of the advice.
 
 Today is ${now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}.
 

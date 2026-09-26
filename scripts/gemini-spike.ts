@@ -17,7 +17,7 @@ async function main() {
     "Training for a half-marathon in November. I'm allergic to peanuts. My knee's been sore since my last long run, and work has been super stressful this week.";
   const m1 = saveMessage({ role: "user", text: intro });
   console.log("\n--- memory builder ---");
-  const changes = await buildMemories(intro, null, m1.id);
+  const { changes } = await buildMemories(intro, null, m1.id);
   for (const c of changes) console.log(c.op, c.memory.tier, c.memory.category ?? "", "|", c.memory.text);
   saveMessage({ role: "coach", text: "Got it, noted all of that." });
 

@@ -39,6 +39,7 @@ export default function MessageBubble({
   const text = stripTags(msg.text);
   const chart = msg.tool_calls.find((t) => t.chart)?.chart;
   const checkin = msg.kind === "checkin";
+  const persona = msg.kind === "persona";
 
   return (
     <motion.div
@@ -52,9 +53,12 @@ export default function MessageBubble({
       </div>
       <div className="max-w-[86%] min-w-0">
         {checkin && <div className="tempo-eyebrow mb-1.5 !text-amber">Check-in · your coach reached out</div>}
+        {persona && <div className="tempo-eyebrow mb-1.5 !text-sage">New voice · same memory</div>}
         <div
           className="rounded-card rounded-tl-[3px] border bg-surface-strong px-4 py-3 text-[14px] leading-[1.8] text-ink"
-          style={{ borderColor: checkin ? "var(--tempo-amber)" : "var(--tempo-line)" }}
+          style={{
+            borderColor: checkin ? "var(--tempo-amber)" : persona ? "var(--tempo-sage)" : "var(--tempo-line)",
+          }}
         >
           {msg.streaming &&
             msg.tool_calls.map((t, i) => (

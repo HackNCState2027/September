@@ -2,12 +2,13 @@
 
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AppState, ChatEvent, MemoryView } from "@/lib/types";
+import type { AppState, ChatEvent, MemoryView, Persona } from "@/lib/types";
 import HealthStrip from "./HealthStrip";
-import { ArrowIcon, PlusIcon, TempoMark, TierIcon } from "./Icons";
+import { ArrowIcon, PlusIcon, TempoMark, TierIcon, VoiceIcon } from "./Icons";
 import { TIER_META } from "./tiers";
 import MemoryBoard from "./MemoryBoard";
 import MessageBubble, { type UIMessage } from "./MessageBubble";
+import PersonaPicker from "./PersonaPicker";
 import TimeWarp from "./TimeWarp";
 
 const APP_NAME = "Tempo";
@@ -21,6 +22,7 @@ const SUGGESTIONS = [
   },
   { label: "Plan my day", text: "What should I do today, and what should I eat after?" },
   { label: "My sleep lately", text: "How's my sleep been lately?" },
+  { label: "Make it funny", text: "Can you be a bit funnier?" },
 ];
 
 /** Starter cards on the empty conversation; clicking one sends it. */
@@ -56,6 +58,8 @@ export default function CoachApp() {
   const [syncing, setSyncing] = useState(false);
   const [input, setInput] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [personaFlash, setPersonaFlash] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -143,6 +147,8 @@ export default function CoachApp() {
           const ev = JSON.parse(part.slice(6)) as ChatEvent;
           if (ev.type === "user") {
             setMessages((list) => list.map((m) => (m.id === pendingUser.id ? ev.message : m)));
+          } else if (ev.type === "persona") {
+            onPersonaChanged(ev.persona);
           } else if (ev.type === "learning") {
             setLearning(ev.active);
           } else if (ev.type === "memory") {
@@ -243,6 +249,40 @@ export default function CoachApp() {
     const res = await fetch("/api/reset", { method: "POST" });
     applyState(await res.json());
     flash("Fresh start. Memory and conversation cleared.");
+  }
+
+  const onPersonaChanged = (p: Persona) => {
+    setMeta((m) => (m ? { ...m, persona: p } : m));
+    setPersonaFlash((n) => n + 1);
+    flash(`New voice: ${p.name}. Same memory.`);
+  };
+
+  /** Pick a preset or describe a custom voice; the coach then introduces itself in character. */
+  async function changePersona(body: { id?: string; custom?: string }) {
+    if (busy) return;
+    setPickerOpen(false);
+    setBusy(true);
+    setCoachTyping(true);
+    try {
+      const res = await fetch("/api/persona", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!json.state) {
+        flash(json.error ?? "Couldn't change the persona");
+        return;
+      }
+      const known = new Set(messages.map((m) => m.id));
+      const fresh = (json.state as AppState).messages.filter((m) => !known.has(m.id));
+      setMeta((m) => (m ? { ...m, persona: json.state.persona } : m));
+      setPersonaFlash((n) => n + 1);
+      setMessages((list) => [...list, ...fresh]);
+    } finally {
+      setCoachTyping(false);
+      setBusy(false);
+    }
   }
 
   /** New chat, same memory: the coach starts fresh but still knows you. */
@@ -368,6 +408,35 @@ export default function CoachApp() {
                   </span>
                 )}
               </div>
+              <div className="relative ml-auto mr-2">
+                <motion.button
+                  key={personaFlash}
+                  initial={personaFlash ? { backgroundColor: "var(--tempo-moment-soft)" } : false}
+                  animate={{ backgroundColor: "var(--tempo-surface-strong)" }}
+                  transition={{ duration: 1.6 }}
+                  onClick={() => setPickerOpen((o) => !o)}
+                  disabled={busy || !meta}
+                  aria-haspopup="dialog"
+                  aria-expanded={pickerOpen}
+                  className="tempo-press flex items-center gap-1.5 rounded-control border border-line px-2.5 py-1 text-[11px] text-ink-soft hover:border-sage disabled:opacity-40"
+                  title="Change how your coach talks"
+                >
+                  <VoiceIcon size={12} className="text-sage" />
+                  <span className="text-muted">Persona</span>
+                  <span className="font-semibold text-ink">{meta?.persona.name}</span>
+                </motion.button>
+                <AnimatePresence>
+                  {pickerOpen && meta && (
+                    <PersonaPicker
+                      current={meta.persona}
+                      presets={meta.personaPresets}
+                      onPick={(id) => changePersona({ id })}
+                      onCustom={(custom) => changePersona({ custom })}
+                      onClose={() => setPickerOpen(false)}
+                    />
+                  )}
+                </AnimatePresence>
+              </div>
               <button
                 onClick={newConversation}
                 disabled={busy || messages.length === 0}
@@ -380,6 +449,7 @@ export default function CoachApp() {
             <div ref={scrollRef} className="flex-1 space-y-5 overflow-y-auto px-6 py-5" aria-live="polite">
               {messages.length === 0 && meta && (
                 <EmptyConversation
+                  persona={meta.persona}
                   userName={meta.userName}
                   remembered={memories}
                   busy={busy}
@@ -511,11 +581,13 @@ export default function CoachApp() {
 }
 
 function EmptyConversation({
+  persona,
   userName,
   remembered,
   busy,
   onStart,
 }: {
+  persona: Persona;
   userName: string;
   remembered: MemoryView[];
   busy: boolean;
@@ -525,7 +597,9 @@ function EmptyConversation({
   const starters = returning ? RETURNING_STARTERS : STARTERS;
   return (
     <div className="mx-auto mt-6 max-w-xl">
-      <div className="tempo-eyebrow">{returning ? "New conversation" : "Your coach"}</div>
+      <div className="tempo-eyebrow">
+        {returning ? "New conversation" : "Your coach"} · {persona.name} persona
+      </div>
       <h2 className="tempo-display mt-2 text-[28px]">
         {returning ? `Welcome back, ${userName}.` : "Tell me a little about yourself."}
       </h2>

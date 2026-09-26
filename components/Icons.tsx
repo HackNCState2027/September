@@ -53,6 +53,13 @@ export const PlusIcon = ({ size, className }: P) => (
   </svg>
 );
 
+export const VoiceIcon = ({ size, className }: P) => (
+  <svg {...base(size)} className={className}>
+    <path d="M4 5h16v11H9l-5 4z" />
+    <path d="M9 10h.01M12 10h.01M15 10h.01" />
+  </svg>
+);
+
 export const LookBackIcon = ({ size, className }: P) => (
   <svg {...base(size)} className={className}>
     <path d="M3 12a9 9 0 1 0 3-6.7" />
