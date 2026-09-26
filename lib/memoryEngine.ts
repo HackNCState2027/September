@@ -1,5 +1,6 @@
 import { getDb } from "./db";
 import { DAY_MS, simNow } from "./clock";
+import { messageText } from "./messages";
 import type { Memory, MemoryView, MomentCategory, Tier } from "./types";
 
 /** The LLM picks the category; code owns the lifespan. Keeps the demo deterministic. */
@@ -28,7 +29,12 @@ export function toView(m: Memory, now = simNow()): MemoryView {
   const daysLeft = isMoment
     ? Math.max(0, Math.ceil((new Date(m.expires_at!).getTime() - now.getTime()) / DAY_MS))
     : null;
-  return { ...m, strength: strength(m, now), days_left: daysLeft };
+  return {
+    ...m,
+    strength: strength(m, now),
+    days_left: daysLeft,
+    source_text: m.source_message_id ? messageText(m.source_message_id) : null,
+  };
 }
 
 export function getMemory(id: number): Memory | undefined {

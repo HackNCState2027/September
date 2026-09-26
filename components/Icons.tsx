@@ -47,6 +47,12 @@ export const ArrowIcon = ({ size, className }: P) => (
   </svg>
 );
 
+export const PlusIcon = ({ size, className }: P) => (
+  <svg {...base(size)} className={className}>
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+
 export const LookBackIcon = ({ size, className }: P) => (
   <svg {...base(size)} className={className}>
     <path d="M3 12a9 9 0 1 0 3-6.7" />
