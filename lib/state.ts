@@ -3,6 +3,7 @@ import { localDate, simNow, simOffsetDays } from "./clock";
 import { liveMemories, resolvedMemories, toView } from "./memoryEngine";
 import { allMessages } from "./messages";
 import { latestDate, todaySnapshot } from "./tools";
+import { canRewind } from "./timeTravel";
 import { userName } from "./coach";
 import type { AppState } from "./types";
 
@@ -12,6 +13,7 @@ export function getAppState(): AppState {
   return {
     today: todaySnapshot(),
     sessionId: currentSession(db),
+    canRewind: canRewind(),
     simDate: localDate(now),
     simOffsetDays: simOffsetDays(),
     userName: userName(),
