@@ -1,5 +1,5 @@
 import { getDb } from "./db";
-import type { ChartData, DailyStats, Workout } from "./types";
+import type { ChartData, DailyStats, TodayMetric, TodaySnapshot, Workout } from "./types";
 
 const METRICS = {
   sleep: { column: "sleep_min", label: "sleep", unit: "h", toDisplay: (v: number) => round1(v / 60) },
@@ -123,6 +123,49 @@ export function runTool(name: string, args: Record<string, unknown>): ToolResult
   }
 
   return { result: { error: `Unknown tool ${name}` }, label: name };
+}
+
+/** The "Today" strip in the UI: latest day vs the previous 7-day average, plus a 7-day series. */
+export function todaySnapshot(): TodaySnapshot | null {
+  const rows = lastNDays(8);
+  const today = rows.at(-1);
+  if (!today) return null;
+  const prior = rows.slice(0, -1);
+  const week = rows.slice(-7);
+
+  const metric = (
+    key: TodayMetric["key"],
+    label: string,
+    col: "sleep_min" | "hrv_ms" | "resting_hr" | "steps",
+    unit: string,
+    goodWhen: "up" | "down",
+    format: (v: number) => string,
+    withDelta = true,
+  ): TodayMetric => {
+    const v = today[col];
+    const prev = prior.map((r) => r[col]).filter((x): x is number => x != null);
+    const avg = prev.length ? prev.reduce((a, b) => a + b, 0) / prev.length : null;
+    return {
+      key,
+      label,
+      value: v != null ? format(v) : "—",
+      unit,
+      delta: withDelta && v != null && avg ? Math.round(((v - avg) / avg) * 100) : null,
+      goodWhen,
+      series: week.map((r) => r[col]),
+    };
+  };
+
+  return {
+    date: today.date,
+    metrics: [
+      metric("sleep", "Sleep", "sleep_min", "", "up", (v) => `${Math.floor(v / 60)}h ${String(Math.round(v % 60)).padStart(2, "0")}m`),
+      metric("hrv", "HRV", "hrv_ms", "ms", "up", (v) => String(Math.round(v))),
+      metric("resting_hr", "Resting HR", "resting_hr", "bpm", "down", (v) => String(Math.round(v))),
+      // Today's steps are still counting, so a delta vs full days would mislead.
+      metric("steps", "Steps", "steps", "so far", "up", (v) => Math.round(v).toLocaleString("en-US"), false),
+    ],
+  };
 }
 
 /** Short-term context for the system prompt: latest day + 7-day baseline. */

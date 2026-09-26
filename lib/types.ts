@@ -81,7 +81,25 @@ export interface Workout {
   avg_hr?: number | null;
 }
 
+export interface TodayMetric {
+  key: "sleep" | "hrv" | "resting_hr" | "steps";
+  label: string;
+  value: string;
+  unit: string;
+  /** % change vs the previous 7-day average; null when not meaningful. */
+  delta: number | null;
+  /** Which direction is good for this metric. */
+  goodWhen: "up" | "down";
+  series: (number | null)[];
+}
+
+export interface TodaySnapshot {
+  date: string;
+  metrics: TodayMetric[];
+}
+
 export interface AppState {
+  today: TodaySnapshot | null;
   simDate: string;
   simOffsetDays: number;
   userName: string;
