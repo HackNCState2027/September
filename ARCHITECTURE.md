@@ -31,6 +31,7 @@ It uses the user's **real Google Health data** (Fitbit / Pixel Watch) and **Gemi
 | 1 | Hook (20s) | Says the problem line | — |
 | 2 | Memory builds live (45s) | Types: *"Training for a half-marathon in November. I'm allergic to peanuts. My knee's been sore since my last long run, and work has been super stressful this week."* | 4 cards animate onto the board, each in the right tier with a lifespan ring: 🔒 peanut allergy · 🎯 half-marathon Nov · 🌊 sore knee · 🌊 stressful week |
 | 3 | Advice that respects memory (45s) | *"What should I do today, and what should I eat after?"* | Upper-body/easy day instead of a run, a snack without peanuts. Chips: `🔒 peanut allergy` `🌊 sore knee` `🎯 half-marathon` `📊 today` |
+| 3a | Your coach, your way (30s) | Clicks **Persona → Funny**, then asks *"What should I eat after my run?"* (or just types *"can you be funnier?"*) | The coach reintroduces itself in the new voice and mentions the knee; the answer is funny but still peanut-free with the 🔒 chip. Line: *"Personality changes. Your facts don't."* |
 | 3b | New conversation (20s) | Clicks **New conversation**, then *"What do you remember?"* | Empty chat, *"Welcome back, Ethan."* The coach lists what it knows with no chat history at all. This is the core problem solved: no re-explaining. |
 | 4 | Context zooms out (30s) | *"How's my sleep been lately?"* | Trace shows `fetching sleep · last 7 days…`, answer with real numbers + a mini chart |
 | 5 | Fast-forward (45s) | Clicks **⏩ +7 days** | Stressful-week card fades away. Knee card pulses amber, **coach messages first**: *"How's the knee?"* Presenter types *"All good now"* → knee card gets ✓ and slides to history. 🔒 and 🎯 cards don't move. |
@@ -345,6 +346,15 @@ Plain TypeScript. **The LLM picks the category; code decides the lifespan.** Thi
 
 With the demo script, **+7 days** gives: stressful week (5d) → faded; knee (injury, 7d) → check-in; goal + core → unchanged. ✅
 
+### 8.5b Persona
+
+The persona changes **how** the coach talks, never **what** it knows or the safety rules. It is stored in `app_state` (so it carries across conversations; Reset returns to *Steady*) and injected into the coach and check-in prompts as a voice description, with an explicit note that it cannot override the hard rules.
+
+- **Presets** (`lib/persona.ts`): Steady (default), Hype, Funny, Tough love, Zen.
+- **Custom**: the user describes a voice; Gemini turns it into a name + tone-only instruction and drops anything that tries to change rules or facts.
+- **From chat**: the memory builder's schema has a `persona` field. A style request ("be funnier") fills it instead of creating a memory card; the chat route sets the persona before the coach answers, so that reply already uses the new voice.
+- **UI**: *Persona* button in the conversation header opens a picker with sample lines; changing it shows a "New voice · same memory" message in character.
+
 ### 8.6 Check-in (⑥)
 
 When `tick` moves memories to `checkin`, `checkin.ts` makes a small Gemini call: *"Write one friendly 1–2 sentence check-in for {user_name} asking whether these still apply: {texts}. Offer to stop planning around them if not."* It saves a `messages` row with `role='coach'`, `kind='checkin'` and sets `checkin_sent_at`. If the call fails, fall back to the template `"Hey {name}, how's the {text}? Should I keep planning around it?"`. The user's reply is a normal chat turn, and the memory builder resolves or refreshes the memory.
@@ -358,6 +368,7 @@ When `tick` moves memories to `checkin`, `checkin.ts` makes a small Gemini call:
 | `POST /api/clock` `{days: 7}` | Save a snapshot → `sim_offset_days += days` → `tick()` → maybe a check-in | `{ state, checkinMessageId }` |
 | `POST /api/clock` `{days: -7}` | **Rewind:** restore the last snapshot (memories, conversation, clock). Undoes the fast-forward exactly; 400 if there is nothing to undo | `{ state }` |
 | `POST /api/sync` | Google Health → `daily_stats` | `{ days, source, lastSyncAt }` |
+| `POST /api/persona` `{id}` or `{custom}` | Set a preset or build a custom persona (tone only; attempts to change rules are dropped), then save an in-character intro message | `{ state, messageId }` |
 | `POST /api/session` | Start a new conversation (`session_id += 1`). Memories and health data carry over | `AppState` |
 | `POST /api/reset` | Delete memories + messages, `sim_offset_days = 0`, `session_id = 1` (keeps `daily_stats`) | `AppState` |
 

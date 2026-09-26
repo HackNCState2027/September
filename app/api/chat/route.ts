@@ -1,6 +1,7 @@
 import { runCoach } from "@/lib/coach";
 import { runTick } from "@/lib/checkin";
 import { buildMemories } from "@/lib/memoryBuilder";
+import { setPersona } from "@/lib/persona";
 import { recentMessages, saveMessage } from "@/lib/messages";
 import type { ChatEvent } from "@/lib/types";
 
@@ -20,8 +21,14 @@ export async function POST(request: Request) {
         // Learn first, then answer: the board fills visibly, and the coach can cite what it just learned.
         send({ type: "learning", active: true });
         try {
-          const changes = await buildMemories(text, previousCoach, userMsg.id);
+          const { changes, persona } = await buildMemories(text, previousCoach, userMsg.id);
           changes.forEach((c) => send({ type: "memory", op: c.op, memory: c.memory }));
+          // "Be funnier" in plain chat switches the persona; this very reply uses the new voice.
+          if (persona) {
+            const p = { id: "custom", name: persona.name, tagline: persona.style, sample: "", instruction: persona.style, custom: true };
+            setPersona(p);
+            send({ type: "persona", persona: p });
+          }
         } catch (err) {
           console.error("memory builder failed", err);
         }

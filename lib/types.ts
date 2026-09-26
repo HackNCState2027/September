@@ -50,10 +50,19 @@ export interface ToolCallRecord {
   chart?: ChartData;
 }
 
+export interface Persona {
+  id: string; // preset id, or "custom"
+  name: string;
+  tagline: string;
+  sample: string; // example line shown in the picker ("" for custom)
+  instruction: string; // voice description given to the coach
+  custom: boolean;
+}
+
 export interface Message {
   id: number;
   role: "user" | "coach";
-  kind: "chat" | "checkin";
+  kind: "chat" | "checkin" | "persona";
   text: string;
   chips: Chip[];
   tool_calls: ToolCallRecord[];
@@ -103,6 +112,8 @@ export interface AppState {
   today: TodaySnapshot | null;
   sessionId: number;
   canRewind: boolean;
+  persona: Persona;
+  personaPresets: Persona[];
   simDate: string;
   simOffsetDays: number;
   userName: string;
@@ -118,6 +129,7 @@ export interface AppState {
 export type ChatEvent =
   | { type: "user"; message: Message }
   | { type: "learning"; active: boolean }
+  | { type: "persona"; persona: Persona }
   | { type: "memory"; op: "create" | "refresh" | "resolve" | "update"; memory: MemoryView }
   | { type: "tool"; call: ToolCallRecord }
   | { type: "text"; delta: string }

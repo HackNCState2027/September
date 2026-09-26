@@ -4,7 +4,8 @@ import { liveMemories, resolvedMemories, toView } from "./memoryEngine";
 import { allMessages } from "./messages";
 import { latestDate, todaySnapshot } from "./tools";
 import { canRewind } from "./timeTravel";
-import { userName } from "./coach";
+import { getPersona, PRESETS } from "./persona";
+import { userName } from "./user";
 import type { AppState } from "./types";
 
 export function getAppState(): AppState {
@@ -14,6 +15,8 @@ export function getAppState(): AppState {
     today: todaySnapshot(),
     sessionId: currentSession(db),
     canRewind: canRewind(),
+    persona: getPersona(),
+    personaPresets: PRESETS,
     simDate: localDate(now),
     simOffsetDays: simOffsetDays(),
     userName: userName(),
