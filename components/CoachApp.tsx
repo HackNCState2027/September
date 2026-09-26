@@ -28,6 +28,7 @@ export default function CoachApp() {
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [glowIds, setGlowIds] = useState<Set<number>>(new Set());
   const [coachTyping, setCoachTyping] = useState(false);
+  const [learning, setLearning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [input, setInput] = useState("");
   const [toast, setToast] = useState<string | null>(null);
@@ -114,6 +115,8 @@ export default function CoachApp() {
           const ev = JSON.parse(part.slice(6)) as ChatEvent;
           if (ev.type === "user") {
             setMessages((list) => list.map((m) => (m.id === pendingUser.id ? ev.message : m)));
+          } else if (ev.type === "learning") {
+            setLearning(ev.active);
           } else if (ev.type === "memory") {
             onMemoryEvent(ev.op, ev.memory);
           } else if (ev.type === "tool") {
@@ -131,6 +134,7 @@ export default function CoachApp() {
       patchCoach((m) => ({ ...m, streaming: false, text: `⚠️ ${String(err)}` }));
     } finally {
       setBusy(false);
+      setLearning(false);
       inputRef.current?.focus();
     }
   }
@@ -335,7 +339,7 @@ export default function CoachApp() {
 
         {/* Memory board */}
         <aside className="flex w-[400px] shrink-0 flex-col border-l border-line bg-bg">
-          <MemoryBoard memories={memories} history={history} glowIds={glowIds} />
+          <MemoryBoard memories={memories} history={history} glowIds={glowIds} learning={learning} />
         </aside>
       </main>
 

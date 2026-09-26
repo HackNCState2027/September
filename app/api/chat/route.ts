@@ -17,20 +17,21 @@ export async function POST(request: Request) {
         const userMsg = saveMessage({ role: "user", text });
         send({ type: "user", message: userMsg });
 
-        // Memory builder and coach run in parallel, so cards appear while the reply streams.
-        const memoryTask = buildMemories(text, previousCoach, userMsg.id)
-          .then((changes) => changes.forEach((c) => send({ type: "memory", op: c.op, memory: c.memory })))
-          .catch((err) => console.error("memory builder failed", err));
+        // Learn first, then answer: the board fills visibly, and the coach can cite what it just learned.
+        send({ type: "learning", active: true });
+        try {
+          const changes = await buildMemories(text, previousCoach, userMsg.id);
+          changes.forEach((c) => send({ type: "memory", op: c.op, memory: c.memory }));
+        } catch (err) {
+          console.error("memory builder failed", err);
+        }
+        send({ type: "learning", active: false });
 
-        const coachTask = runCoach({
+        const out = await runCoach({
           onText: (delta) => send({ type: "text", delta }),
           onTool: (call) => send({ type: "tool", call }),
-        }).then((out) => {
-          const msg = saveMessage({ role: "coach", text: out.text, chips: out.chips, toolCalls: out.toolCalls });
-          return msg;
         });
-
-        const [, coachMsg] = await Promise.all([memoryTask, coachTask]);
+        const coachMsg = saveMessage({ role: "coach", text: out.text, chips: out.chips, toolCalls: out.toolCalls });
         send({ type: "done", message: coachMsg });
       } catch (err) {
         console.error("chat failed", err);

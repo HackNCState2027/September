@@ -96,6 +96,7 @@ export interface AppState {
 /** Events streamed from POST /api/chat. */
 export type ChatEvent =
   | { type: "user"; message: Message }
+  | { type: "learning"; active: boolean }
   | { type: "memory"; op: "create" | "refresh" | "resolve" | "update"; memory: MemoryView }
   | { type: "tool"; call: ToolCallRecord }
   | { type: "text"; delta: string }

@@ -12,10 +12,12 @@ export default function MemoryBoard({
   memories,
   history,
   glowIds,
+  learning,
 }: {
   memories: MemoryView[];
   history: MemoryView[];
   glowIds: Set<number>;
+  learning: boolean;
 }) {
   const [showHistory, setShowHistory] = useState(false);
 
@@ -23,7 +25,23 @@ export default function MemoryBoard({
     <div className="flex h-full flex-col">
       <div className="flex items-baseline justify-between px-5 pt-5 pb-3">
         <h2 className="text-[15px] font-semibold tracking-tight">What your coach remembers</h2>
-        <span className="text-xs text-muted">{memories.length} live</span>
+        <AnimatePresence mode="wait" initial={false}>
+          {learning ? (
+            <motion.span
+              key="learning"
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="flex items-center gap-1.5 rounded-full bg-goal-soft px-2 py-0.5 text-xs font-semibold text-goal"
+            >
+              <span className="animate-pulse">🧠</span> Learning…
+            </motion.span>
+          ) : (
+            <motion.span key="count" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-xs text-muted">
+              {memories.length} live
+            </motion.span>
+          )}
+        </AnimatePresence>
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-5">

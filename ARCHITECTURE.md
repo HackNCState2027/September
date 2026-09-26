@@ -282,22 +282,21 @@ Note: memories created *in the same turn* can't be tagged (they don't have IDs y
 
 ### 8.4 Memory builder (②)
 
-**Model:** `MEMORY_MODEL` (default `gemini-3.8-flash`), **structured JSON output**, not streamed. It runs **in parallel** with the coach on every user message.
+**Model:** `MEMORY_MODEL` (default `gemini-3.8-flash`), **structured JSON output**, not streamed. It runs **before** the coach on every user message (~1.5–2 s). The board shows **🧠 Learning…**, the cards land, and then the coach answers. This makes the "learn, then use it" story visible, and it lets the coach cite memories created in the same turn.
 
 **Input:** current sim date · all non-faded memories `(id, tier, category, text, status)` · pending check-ins · the coach's previous message (so it can read a reply to a check-in) · the new user message.
 
-**Output schema:**
+**Output schema:** four lists, **every field required**. In live testing, a schema with optional fields made Gemini return `{"op":"create","tier":"goal"}` with no label and stop.
 ```json
 {
-  "actions": [
-    { "op": "create",  "tier": "core|goal|moment", "category": "injury|illness|travel|stress|poor_sleep|fatigue|other|null",
-      "text": "short label, <= 8 words", "end_date": "YYYY-MM-DD|null" },
-    { "op": "refresh", "memory_id": 4 },
-    { "op": "resolve", "memory_id": 4 },
-    { "op": "update",  "memory_id": 4, "text": "new label" }
-  ]
+  "create":  [{ "text": "short label", "tier": "core|goal|moment",
+                "category": "none|injury|illness|travel|stress|poor_sleep|fatigue|other", "end_date": "YYYY-MM-DD or \"\"" }],
+  "refresh": [4],
+  "resolve": [4],
+  "update":  [{ "memory_id": 4, "text": "new label" }]
 }
 ```
+Set `DEBUG_MEMORY=1` to log the raw output.
 
 **Prompt rules (summary):**
 - **core** = stable facts that must never be violated or forgotten: allergies, chronic conditions, medications, dietary rules, permanent injuries/surgeries.
@@ -386,7 +385,7 @@ One page, two columns (~60/40), desktop only.
 
 **Chat turn**
 1. Client `POST /api/chat` → server saves user message (sim time) → `tick()`.
-2. In parallel: **memory builder** (→ `applyActions` → `memory` events) and **coach** (→ `tool` events → `text` deltas).
+2. `learning` event → **memory builder** (→ `applyActions` → `memory` events) → **coach** (→ `tool` events → `text` deltas).
 3. Coach finishes → save message with `chips_json` + `tool_calls_json` → `done`.
 4. Client strips tags, renders chips + chart; board has already updated from `memory` events.
 
@@ -449,8 +448,8 @@ USER_NAME=Alex
 | Next.js app, SQLite, sample data (auto-seeded on first run, regenerated on Reset) | ✅ built |
 | Memory engine: tiers, lifespans, fading, check-in trigger | ✅ built and tested without an LLM |
 | Memory board UI, lifespan rings, chips, trace, mini chart, fast-forward animation | ✅ built and checked in the browser |
-| Coach (streaming + tools) and memory builder (JSON) on Gemini | ✅ written, ⏳ needs `GEMINI_API_KEY` to verify (`npm run gemini:spike`) |
-| Check-in message | ✅ Gemini with a template fallback (the fallback is verified) |
+| Coach (streaming + tools) and memory builder (JSON) on Gemini | ✅ verified live: the full demo script plays end to end in the browser |
+| Check-in message | ✅ Gemini-written (verified), with a template fallback |
 | Google Health sync | ✅ written, ⏳ needs OAuth setup + `npm run google:dump` to confirm field names |
 | Presenter helpers | Script buttons above the input fill in each demo line; double-click the data badge to load sample data |
 
@@ -466,8 +465,8 @@ USER_NAME=Alex
 | 6 | Check-in must fire before a high-stakes memory vanishes | Check-in triggers at ≤30% strength *or* expiry; the memory can't fade until answered or 3 days pass |
 | 7 | Duplicate memories on repeated mentions | Builder sees existing memories; must `refresh`, not `create` |
 | 8 | How chips know what was used | Coach tags `[[mN]]` / `[[today]]`; tool calls add data chips |
-| 9 | Memories from the same turn can't be cited | Accepted; the user's own words cover it |
-| 10 | Board updates while the coach streams | Both run in one request; memory events share the SSE stream (no polling) |
+| 9 | Memories from the same turn can't be cited | Solved by learn-then-answer ordering |
+| 10 | Cards arrived *after* the coach's reply when run in parallel (the builder is slower) | Changed to learn-then-answer in one SSE stream, with a "🧠 Learning…" indicator (found in live testing) |
 | 11 | Demo classification might vary | Exact demo sentences are few-shot examples in the builder prompt |
 | 12 | Gemini SDK field names (system instruction, thinking level) not confirmed | Hour-0 spike S2 |
 | 13 | Google Health filter names / response shapes not confirmed | Hour-0 spike S3, map against saved raw JSON |
