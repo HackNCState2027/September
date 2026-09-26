@@ -16,14 +16,12 @@ export default function MemoryBoard({
   glowIds,
   learning,
   highlightId,
-  sourceOf,
 }: {
   memories: MemoryView[];
   history: MemoryView[];
   glowIds: Set<number>;
   learning: boolean;
   highlightId: number | null;
-  sourceOf: (m: MemoryView) => string | undefined;
 }) {
   const [showHistory, setShowHistory] = useState(false);
 
@@ -76,7 +74,7 @@ export default function MemoryBoard({
                       m={m}
                       glow={glowIds.has(m.id)}
                       highlighted={highlightId === m.id}
-                      source={sourceOf(m)}
+                      source={excerpt(m.source_text)}
                     />
                   ))}
                 </AnimatePresence>
@@ -128,6 +126,11 @@ export default function MemoryBoard({
       </div>
     </div>
   );
+}
+
+function excerpt(text: string | null) {
+  if (!text) return undefined;
+  return text.length > 110 ? `${text.slice(0, 107)}…` : text;
 }
 
 function MemoryCard({

@@ -30,6 +30,7 @@ export interface Memory {
 export interface MemoryView extends Memory {
   strength: number; // 0..1, always 1 for core/goal
   days_left: number | null; // null for core/goal
+  source_text: string | null; // the message it was learned from, in any conversation
 }
 
 export type Chip =
@@ -100,6 +101,7 @@ export interface TodaySnapshot {
 
 export interface AppState {
   today: TodaySnapshot | null;
+  sessionId: number;
   simDate: string;
   simOffsetDays: number;
   userName: string;

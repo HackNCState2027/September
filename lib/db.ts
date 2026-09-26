@@ -57,6 +57,12 @@ function open(): Database.Database {
   db.pragma("journal_mode = WAL");
   db.exec(SCHEMA);
 
+  // Migration: conversations. Memories span every conversation; messages belong to one.
+  const cols = db.prepare("PRAGMA table_info(messages)").all() as { name: string }[];
+  if (!cols.some((c) => c.name === "session_id")) {
+    db.exec("ALTER TABLE messages ADD COLUMN session_id INTEGER NOT NULL DEFAULT 1");
+  }
+
   // First run: fill with sample data so the app works before Google Health is set up.
   const count = db.prepare("SELECT COUNT(*) AS n FROM daily_stats").get() as { n: number };
   if (count.n === 0) {
@@ -76,6 +82,11 @@ export function getStateValue(key: string, db = getDb()): string | null {
     | { value: string }
     | undefined;
   return row?.value ?? null;
+}
+
+/** The conversation new messages go into. Starting a new one keeps all memories. */
+export function currentSession(db = getDb()): number {
+  return Number(getStateValue("session_id", db) ?? "1");
 }
 
 export function setStateValue(db: Database.Database, key: string, value: string) {

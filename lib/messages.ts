@@ -1,4 +1,4 @@
-import { getDb } from "./db";
+import { currentSession, getDb } from "./db";
 import { simNow } from "./clock";
 import type { Chip, Message, ToolCallRecord } from "./types";
 
@@ -33,7 +33,7 @@ export function saveMessage(input: {
 }): Message {
   const info = getDb()
     .prepare(
-      "INSERT INTO messages (role, kind, text, chips_json, tool_calls_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO messages (role, kind, text, chips_json, tool_calls_json, created_at, session_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
     .run(
       input.role,
@@ -42,6 +42,7 @@ export function saveMessage(input: {
       JSON.stringify(input.chips ?? []),
       JSON.stringify(input.toolCalls ?? []),
       simNow().toISOString(),
+      currentSession(),
     );
   return getMessage(Number(info.lastInsertRowid))!;
 }
@@ -51,10 +52,26 @@ export function getMessage(id: number): Message | undefined {
   return r ? fromRow(r) : undefined;
 }
 
+/** Messages in the current conversation only. */
 export function allMessages(): Message[] {
-  return (getDb().prepare("SELECT * FROM messages ORDER BY id").all() as Row[]).map(fromRow);
+  return (
+    getDb().prepare("SELECT * FROM messages WHERE session_id = ? ORDER BY id").all(currentSession()) as Row[]
+  ).map(fromRow);
 }
 
+/** The last n messages of the current conversation (what the coach sees as chat history). */
 export function recentMessages(n: number): Message[] {
-  return (getDb().prepare("SELECT * FROM messages ORDER BY id DESC LIMIT ?").all(n) as Row[]).map(fromRow).reverse();
+  return (
+    getDb()
+      .prepare("SELECT * FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT ?")
+      .all(currentSession(), n) as Row[]
+  )
+    .map(fromRow)
+    .reverse();
+}
+
+/** Text of any message, from any conversation (for "learned from" on memory cards). */
+export function messageText(id: number): string | null {
+  const r = getDb().prepare("SELECT text FROM messages WHERE id = ?").get(id) as { text: string } | undefined;
+  return r?.text ?? null;
 }

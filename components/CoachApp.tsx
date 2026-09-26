@@ -4,7 +4,8 @@ import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AppState, ChatEvent, MemoryView } from "@/lib/types";
 import HealthStrip from "./HealthStrip";
-import { ArrowIcon, TempoMark } from "./Icons";
+import { ArrowIcon, PlusIcon, TempoMark, TierIcon } from "./Icons";
+import { TIER_META } from "./tiers";
 import MemoryBoard from "./MemoryBoard";
 import MessageBubble, { type UIMessage } from "./MessageBubble";
 import TimeWarp from "./TimeWarp";
@@ -27,6 +28,13 @@ const STARTERS = [
   { title: "Tell me about you", body: "Your goals, anything to avoid, and how this week is going.", text: SUGGESTIONS[0].text },
   { title: "Plan today", body: "What to train, and what to eat after, based on how you slept.", text: SUGGESTIONS[1].text },
   { title: "Look back", body: "How your sleep has been trending this past week.", text: SUGGESTIONS[2].text },
+];
+
+/** In a new conversation, when the coach already knows you. */
+const RETURNING_STARTERS = [
+  { title: "What do you remember?", body: "See what your coach carried over from before.", text: "What do you remember about me?" },
+  STARTERS[1],
+  STARTERS[2],
 ];
 
 const CHECKIN_REPLIES = ["All good now", "Still bothering me"];
@@ -213,6 +221,15 @@ export default function CoachApp() {
     flash("Fresh start. Memory and conversation cleared.");
   }
 
+  /** New chat, same memory: the coach starts fresh but still knows you. */
+  async function newConversation() {
+    if (busy) return;
+    const res = await fetch("/api/session", { method: "POST" });
+    applyState(await res.json());
+    setInput("");
+    inputRef.current?.focus();
+  }
+
   async function sync(sample = false) {
     if (busy || syncing) return;
     setSyncing(true);
@@ -230,10 +247,6 @@ export default function CoachApp() {
     }
   }
 
-  const sourceOf = (m: MemoryView) => {
-    const text = messages.find((x) => x.id === m.source_message_id)?.text;
-    return text && text.length > 110 ? `${text.slice(0, 107)}…` : text;
-  };
 
   const pendingCheckin = memories.some((m) => m.status === "checkin");
   const lastId = messages.at(-1)?.id;
@@ -314,31 +327,32 @@ export default function CoachApp() {
         {/* Workspace: chat (60%) | memory board (40%) */}
         <main className="flex min-h-0 flex-1 gap-4 px-6">
           <section className="tempo-card flex min-w-0 flex-[3] flex-col overflow-hidden" aria-label="Conversation">
+            <div className="flex items-center justify-between border-b border-line px-6 py-2.5">
+              <div className="flex items-baseline gap-2">
+                <span className="tempo-eyebrow">Conversation</span>
+                {meta && meta.sessionId > 1 && (
+                  <span className="text-[10px] text-muted">
+                    #{meta.sessionId} · memory carried over
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={newConversation}
+                disabled={busy || messages.length === 0}
+                className="tempo-press flex items-center gap-1.5 rounded-control border border-line bg-surface-strong px-2.5 py-1 text-[11px] font-semibold text-sage hover:border-sage disabled:opacity-40"
+                title="Start a fresh chat. Your coach keeps everything it remembers."
+              >
+                <PlusIcon size={12} /> New conversation
+              </button>
+            </div>
             <div ref={scrollRef} className="flex-1 space-y-5 overflow-y-auto px-6 py-5" aria-live="polite">
               {messages.length === 0 && meta && (
-                <div className="mx-auto mt-6 max-w-xl">
-                  <div className="tempo-eyebrow">Your coach</div>
-                  <h2 className="tempo-display mt-2 text-[28px]">
-                    Tell me a little about yourself.
-                  </h2>
-                  <p className="mt-2 text-[13px] leading-[1.8] text-ink-soft">
-                    I&apos;ll remember what matters for as long as it matters, and I already have today&apos;s
-                    snapshot from your watch.
-                  </p>
-                  <div className="mt-5 grid grid-cols-3 gap-3">
-                    {STARTERS.map((s) => (
-                      <button
-                        key={s.title}
-                        onClick={() => send(s.text)}
-                        disabled={busy}
-                        className="tempo-press rounded-card border border-line bg-surface px-3.5 py-3 text-left hover:border-sage disabled:opacity-40"
-                      >
-                        <div className="text-[13px] font-semibold text-ink">{s.title}</div>
-                        <div className="mt-1 text-[11px] leading-relaxed text-muted">{s.body}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <EmptyConversation
+                  userName={meta.userName}
+                  remembered={memories}
+                  busy={busy}
+                  onStart={send}
+                />
               )}
               {messages.map((m) => (
                 <MessageBubble
@@ -432,7 +446,6 @@ export default function CoachApp() {
               glowIds={glowIds}
               learning={learning}
               highlightId={highlightId}
-              sourceOf={sourceOf}
             />
           </aside>
         </main>
@@ -460,6 +473,69 @@ export default function CoachApp() {
         </AnimatePresence>
       </div>
     </MotionConfig>
+  );
+}
+
+function EmptyConversation({
+  userName,
+  remembered,
+  busy,
+  onStart,
+}: {
+  userName: string;
+  remembered: MemoryView[];
+  busy: boolean;
+  onStart: (text: string) => void;
+}) {
+  const returning = remembered.length > 0;
+  const starters = returning ? RETURNING_STARTERS : STARTERS;
+  return (
+    <div className="mx-auto mt-6 max-w-xl">
+      <div className="tempo-eyebrow">{returning ? "New conversation" : "Your coach"}</div>
+      <h2 className="tempo-display mt-2 text-[28px]">
+        {returning ? `Welcome back, ${userName}.` : "Tell me a little about yourself."}
+      </h2>
+      {returning ? (
+        <>
+          <p className="mt-2 text-[13px] leading-[1.8] text-ink-soft">
+            Fresh conversation, same coach. I still remember {remembered.length}{" "}
+            {remembered.length === 1 ? "thing" : "things"} about you, so there&apos;s no need to repeat yourself.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {remembered.map((m) => (
+              <span
+                key={m.id}
+                className="inline-flex items-center gap-1 rounded-control px-2 py-0.5 text-[11px] text-ink"
+                style={{ background: TIER_META[m.tier].soft }}
+              >
+                <span style={{ color: TIER_META[m.tier].color }}>
+                  <TierIcon tier={m.tier} size={11} />
+                </span>
+                {m.text}
+              </span>
+            ))}
+          </div>
+        </>
+      ) : (
+        <p className="mt-2 text-[13px] leading-[1.8] text-ink-soft">
+          I&apos;ll remember what matters for as long as it matters, and I already have today&apos;s snapshot
+          from your watch.
+        </p>
+      )}
+      <div className="mt-5 grid grid-cols-3 gap-3">
+        {starters.map((s) => (
+          <button
+            key={s.title}
+            onClick={() => onStart(s.text)}
+            disabled={busy}
+            className="tempo-press rounded-card border border-line bg-surface px-3.5 py-3 text-left hover:border-sage disabled:opacity-40"
+          >
+            <div className="text-[13px] font-semibold text-ink">{s.title}</div>
+            <div className="mt-1 text-[11px] leading-relaxed text-muted">{s.body}</div>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

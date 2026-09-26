@@ -1,4 +1,4 @@
-import { getDb, getStateValue } from "./db";
+import { currentSession, getDb, getStateValue } from "./db";
 import { localDate, simNow, simOffsetDays } from "./clock";
 import { liveMemories, resolvedMemories, toView } from "./memoryEngine";
 import { allMessages } from "./messages";
@@ -11,6 +11,7 @@ export function getAppState(): AppState {
   const now = simNow();
   return {
     today: todaySnapshot(),
+    sessionId: currentSession(db),
     simDate: localDate(now),
     simOffsetDays: simOffsetDays(),
     userName: userName(),
