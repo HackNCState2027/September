@@ -12,7 +12,7 @@ const APP_NAME = "Recall Coach";
 const SCRIPT = [
   {
     label: "Intro",
-    text: "Training for a half-marathon in November. I'm allergic to peanuts. Knee's been sore since Sunday's long run, and I slept terribly last night.",
+    text: "Training for a half-marathon in November. I'm allergic to peanuts. My knee's been sore since my last long run, and work has been super stressful this week.",
   },
   { label: "Advice", text: "What should I do today, and what should I eat after?" },
   { label: "Sleep", text: "How's my sleep been lately?" },

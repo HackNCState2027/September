@@ -93,6 +93,9 @@ EXAMPLES
 Message: "Training for a half-marathon in November. I'm allergic to peanuts. Knee's been sore since Sunday's long run, and I slept terribly last night."
 -> {"create":[{"text":"Half-marathon in November","tier":"goal","category":"none","end_date":""},{"text":"Allergic to peanuts","tier":"core","category":"none","end_date":""},{"text":"Sore knee since Sunday's long run","tier":"moment","category":"injury","end_date":""},{"text":"Slept terribly last night","tier":"moment","category":"poor_sleep","end_date":""}],"refresh":[],"resolve":[],"update":[]}
 
+Message: "Training for a half-marathon in November. I'm allergic to peanuts. My knee's been sore since my last long run, and work has been super stressful this week."
+-> {"create":[{"text":"Half-marathon in November","tier":"goal","category":"none","end_date":""},{"text":"Allergic to peanuts","tier":"core","category":"none","end_date":""},{"text":"Sore knee since last long run","tier":"moment","category":"injury","end_date":""},{"text":"Stressful week at work","tier":"moment","category":"stress","end_date":""}],"refresh":[],"resolve":[],"update":[]}
+
 Message: "What should I do today, and what should I eat after?"
 -> {"create":[],"refresh":[],"resolve":[],"update":[]}
 

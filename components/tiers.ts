@@ -21,5 +21,5 @@ export function statusLine(m: MemoryView) {
 
 /** Hide [[m12]] / [[today]] tags, including a half-streamed one at the end. */
 export function stripTags(text: string) {
-  return text.replace(/\[\[?(m\d+|today)\]\]?/g, "").replace(/\[\[?[a-z0-9]*$/i, "").replace(/ +([.,;:!?])/g, "$1");
+  return text.replace(/\[\[?(m\d+|today)\]\]?/g, "").replace(/\[\[?[a-z0-9]*$/i, "").replace(/ +([.,;:!?)])/g, "$1");
 }

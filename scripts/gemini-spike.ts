@@ -14,7 +14,7 @@ async function main() {
   db.prepare("DELETE FROM messages").run();
 
   const intro =
-    "Training for a half-marathon in November. I'm allergic to peanuts. Knee's been sore since Sunday's long run, and I slept terribly last night.";
+    "Training for a half-marathon in November. I'm allergic to peanuts. My knee's been sore since my last long run, and work has been super stressful this week.";
   const m1 = saveMessage({ role: "user", text: intro });
   console.log("\n--- memory builder ---");
   const changes = await buildMemories(intro, null, m1.id);

@@ -20,7 +20,7 @@ async function main() {
 
   for (const [type, filter] of Object.entries(filtersFor(3))) {
     try {
-      const points = await listPoints(token, type, filter);
+      const points = await listPoints(token, type, filter, { maxPages: 1 });
       fs.writeFileSync(path.join(dir, `${type}.json`), JSON.stringify(points, null, 2));
       console.log(`${type}: ${points.length} points → data/raw/${type}.json`);
     } catch (err) {

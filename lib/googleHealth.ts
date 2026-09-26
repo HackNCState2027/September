@@ -1,9 +1,9 @@
 /**
- * Google Health API v4 sync (Fitbit / Pixel Watch).
+ * Google Health API v4 sync (Fitbit / Pixel Watch). Field names verified against real
+ * responses (Fitbit Air, Sept 2026). Re-check with `npm run google:dump` if something looks off.
  *
- * ⚠️ Field names below are best guesses from public docs. Before relying on this, run
- *   npx tsx scripts/gh-dump.ts
- * and adjust the extractors against the raw JSON saved in data/raw/.
+ * Note: this API only has data from Fitbit / Pixel devices (and manual entries). Older
+ * phone-only Google Fit history is not available here.
  */
 import { addDays, localDate } from "./clock";
 import type { Workout } from "./types";
@@ -35,69 +35,90 @@ export async function accessToken(): Promise<string> {
   return json.access_token as string;
 }
 
-type Point = Record<string, unknown>;
+// ---- response shapes (only the fields we use) ----------------------------------------
 
-/** Lists all data points for a type, following pagination. */
-export async function listPoints(token: string, type: string, filter: string): Promise<Point[]> {
-  const out: Point[] = [];
+type CivilDate = { year: number; month: number; day: number };
+type Interval = { startTime: string; endTime: string };
+
+type SleepPoint = {
+  sleep: {
+    interval: Interval;
+    metadata?: { mainSleep?: boolean };
+    summary?: { minutesAsleep?: string; stagesSummary?: { type: string; minutes: string }[] };
+  };
+};
+type RhrPoint = { dailyRestingHeartRate: { date: CivilDate; beatsPerMinute: string } };
+type HrvPoint = {
+  heartRateVariability: { sampleTime: { physicalTime: string }; rootMeanSquareOfSuccessiveDifferencesMilliseconds: number };
+};
+type ExercisePoint = {
+  exercise: {
+    interval: Interval;
+    exerciseType?: string;
+    displayName?: string;
+    activeDuration?: string;
+    metricsSummary?: Record<string, unknown>;
+  };
+};
+type StepsRollup = { civilStartTime: { date: CivilDate }; steps?: { countSum?: string } };
+
+/** Lists data points for a type, following pagination. `stopWhen` ends paging early. */
+export async function listPoints<T>(
+  token: string,
+  type: string,
+  filter: string | null,
+  opts: { maxPages?: number; stopWhen?: (page: T[]) => boolean } = {},
+): Promise<T[]> {
+  const out: T[] = [];
   let pageToken: string | undefined;
+  let pages = 0;
   do {
     const url = new URL(`${BASE}/${type}/dataPoints`);
-    url.searchParams.set("filter", filter);
+    if (filter) url.searchParams.set("filter", filter);
     url.searchParams.set("pageSize", "1000");
     if (pageToken) url.searchParams.set("pageToken", pageToken);
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     const json = await res.json();
     if (!res.ok) throw new Error(`${type}: ${res.status} ${JSON.stringify(json).slice(0, 400)}`);
-    out.push(...((json.dataPoints ?? []) as Point[]));
+    const page = (json.dataPoints ?? []) as T[];
+    out.push(...page);
     pageToken = json.nextPageToken;
+    pages++;
+    if (opts.stopWhen?.(page) || (opts.maxPages && pages >= opts.maxPages)) break;
   } while (pageToken);
   return out;
+}
+
+async function dailyStepTotals(token: string, from: string, toExclusive: string): Promise<StepsRollup[]> {
+  const toCivil = (d: string) => {
+    const [year, month, day] = d.split("-").map(Number);
+    return { date: { year, month, day } };
+  };
+  const res = await fetch(`${BASE}/steps/dataPoints:dailyRollUp`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ range: { start: toCivil(from), end: toCivil(toExclusive) } }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(`steps rollup: ${res.status} ${JSON.stringify(json).slice(0, 400)}`);
+  return (json.rollupDataPoints ?? []) as StepsRollup[];
 }
 
 export function filtersFor(days: number) {
   const since = new Date(Date.now() - days * 86_400_000);
   const sinceIso = since.toISOString();
-  const sinceDate = localDate(since);
   return {
     sleep: `sleep.interval.end_time >= "${sinceIso}"`,
     steps: `steps.interval.start_time >= "${sinceIso}"`,
-    "daily-resting-heart-rate": `daily_resting_heart_rate.date >= "${sinceDate}"`,
+    "daily-resting-heart-rate": `daily_resting_heart_rate.date >= "${localDate(since)}"`,
     "heart-rate-variability": `heart_rate_variability.sample_time.physical_time >= "${sinceIso}"`,
-    exercise: `exercise.interval.end_time >= "${sinceIso}"`,
+    exercise: null, // the API rejects every interval filter on exercise; we filter by date locally
   } as const;
 }
 
-// ---- tolerant extractors -------------------------------------------------------------
-
-/** Find the first value for any of the keys, searching nested objects. */
-function find(obj: unknown, keys: string[]): unknown {
-  if (!obj || typeof obj !== "object") return undefined;
-  for (const k of keys) if (k in (obj as Point)) return (obj as Point)[k];
-  for (const v of Object.values(obj as Point)) {
-    const hit = find(v, keys);
-    if (hit !== undefined) return hit;
-  }
-  return undefined;
-}
-
-const toDate = (v: unknown) => (typeof v === "string" ? new Date(v) : null);
-const toNum = (v: unknown) => (v == null ? null : Number(v));
-
-function interval(p: Point) {
-  const start = toDate(find(p, ["startTime", "start_time", "physicalTime"]));
-  const end = toDate(find(p, ["endTime", "end_time"]));
-  return { start, end };
-}
-
-function dateOf(v: unknown): string | null {
-  if (typeof v === "string") return v.slice(0, 10);
-  if (v && typeof v === "object" && "year" in v) {
-    const d = v as { year: number; month: number; day: number };
-    return `${d.year}-${String(d.month).padStart(2, "0")}-${String(d.day).padStart(2, "0")}`;
-  }
-  return null;
-}
+const civil = (d: CivilDate) =>
+  `${d.year}-${String(d.month).padStart(2, "0")}-${String(d.day).padStart(2, "0")}`;
+const seconds = (s?: string) => (s ? parseFloat(s) : 0);
 
 export interface SyncedDay {
   date: string;
@@ -116,16 +137,22 @@ export interface SyncedDay {
 export async function syncGoogleHealth(days = 30): Promise<SyncedDay[]> {
   const token = await accessToken();
   const f = filtersFor(days);
+  const today = localDate(new Date());
+  const firstDay = addDays(today, -(days - 1));
+  const cutoff = new Date(Date.now() - days * 86_400_000);
+
   const [sleep, steps, rhr, hrv, exercise] = await Promise.all([
-    listPoints(token, "sleep", f.sleep),
-    listPoints(token, "steps", f.steps),
-    listPoints(token, "daily-resting-heart-rate", f["daily-resting-heart-rate"]),
-    listPoints(token, "heart-rate-variability", f["heart-rate-variability"]).catch(() => [] as Point[]),
-    listPoints(token, "exercise", f.exercise).catch(() => [] as Point[]),
+    listPoints<SleepPoint>(token, "sleep", f.sleep),
+    dailyStepTotals(token, firstDay, addDays(today, 1)),
+    listPoints<RhrPoint>(token, "daily-resting-heart-rate", f["daily-resting-heart-rate"]),
+    listPoints<HrvPoint>(token, "heart-rate-variability", f["heart-rate-variability"]),
+    listPoints<ExercisePoint>(token, "exercise", null, {
+      maxPages: 5,
+      stopWhen: (page) => page.some((p) => new Date(p.exercise.interval.startTime) < cutoff),
+    }),
   ]);
 
   const byDate = new Map<string, SyncedDay>();
-  const today = localDate(new Date());
   for (let i = days - 1; i >= 0; i--) {
     const date = addDays(today, -i);
     byDate.set(date, {
@@ -134,79 +161,77 @@ export async function syncGoogleHealth(days = 30): Promise<SyncedDay[]> {
     });
   }
 
-  // Sleep sessions → attributed to the wake-up date.
-  for (const p of sleep) {
-    const { start, end } = interval(p);
-    if (!start || !end) continue;
+  // Sleep: main sleep only, attributed to the local wake-up date.
+  const mainSleeps = sleep.filter((p) => p.sleep.metadata?.mainSleep !== false);
+  for (const p of mainSleeps) {
+    const start = new Date(p.sleep.interval.startTime);
+    const end = new Date(p.sleep.interval.endTime);
     const day = byDate.get(localDate(end));
     if (!day) continue;
-    const minutes = (end.getTime() - start.getTime()) / 60_000;
-    const asleep = toNum(find(p, ["minutesAsleep", "asleepMinutes"])) ?? minutes;
-    day.sleep_min = Math.round((day.sleep_min ?? 0) + asleep);
-    day.sleep_start ??= start.toISOString();
+    const stage = (t: string) =>
+      Number(p.sleep.summary?.stagesSummary?.find((s) => s.type === t)?.minutes ?? 0) || null;
+    const asleep = Number(p.sleep.summary?.minutesAsleep ?? 0) || Math.round((end.getTime() - start.getTime()) / 60_000);
+    day.sleep_min = (day.sleep_min ?? 0) + asleep;
+    day.deep_min = stage("DEEP");
+    day.rem_min = stage("REM");
+    day.sleep_start = start.toISOString();
     day.sleep_end = end.toISOString();
-    const stages = find(p, ["stages", "levels"]);
-    if (Array.isArray(stages)) {
-      for (const s of stages as Point[]) {
-        const kind = String(find(s, ["type", "stage", "level"]) ?? "").toLowerCase();
-        const iv = interval(s);
-        const mins = iv.start && iv.end ? (iv.end.getTime() - iv.start.getTime()) / 60_000 : toNum(find(s, ["minutes"])) ?? 0;
-        if (kind.includes("deep")) day.deep_min = Math.round((day.deep_min ?? 0) + mins);
-        if (kind.includes("rem")) day.rem_min = Math.round((day.rem_min ?? 0) + mins);
-      }
-    }
   }
 
-  // Steps intervals → summed per local day.
   for (const p of steps) {
-    const { start } = interval(p);
-    const day = start && byDate.get(localDate(start));
-    const count = toNum(find(p, ["count", "steps", "value"]));
-    if (day && count != null) day.steps = (day.steps ?? 0) + count;
+    const day = byDate.get(civil(p.civilStartTime.date));
+    if (day && p.steps?.countSum != null) day.steps = Number(p.steps.countSum);
   }
 
   for (const p of rhr) {
-    const day = byDate.get(dateOf(find(p, ["date"])) ?? "");
-    const bpm = toNum(find(p, ["beatsPerMinute", "bpm", "value"]));
-    if (day && bpm != null) day.resting_hr = bpm;
+    const day = byDate.get(civil(p.dailyRestingHeartRate.date));
+    if (day) day.resting_hr = Number(p.dailyRestingHeartRate.beatsPerMinute);
   }
 
-  // HRV samples → daily average.
+  // HRV: Fitbit samples it during sleep. Average each night's samples onto the wake-up date.
+  const nights = mainSleeps.map((p) => ({
+    start: new Date(p.sleep.interval.startTime).getTime(),
+    end: new Date(p.sleep.interval.endTime).getTime(),
+    date: localDate(new Date(p.sleep.interval.endTime)),
+  }));
   const hrvAcc = new Map<string, number[]>();
   for (const p of hrv) {
-    const t = toDate(find(p, ["physicalTime", "startTime"]));
-    const ms = toNum(find(p, ["rmssdMillis", "rmssd", "milliseconds", "value"]));
-    if (!t || ms == null) continue;
-    const key = localDate(t);
-    hrvAcc.set(key, [...(hrvAcc.get(key) ?? []), ms]);
+    const t = new Date(p.heartRateVariability.sampleTime.physicalTime).getTime();
+    const ms = p.heartRateVariability.rootMeanSquareOfSuccessiveDifferencesMilliseconds;
+    if (ms == null) continue;
+    const date = nights.find((n) => t >= n.start && t <= n.end)?.date ?? localDate(new Date(t));
+    hrvAcc.set(date, [...(hrvAcc.get(date) ?? []), ms]);
   }
   for (const [date, values] of hrvAcc) {
     const day = byDate.get(date);
     if (day) day.hrv_ms = Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10;
   }
 
-  // Exercise sessions.
+  // Workouts.
   const workouts = new Map<string, Workout[]>();
   for (const p of exercise) {
-    const { start, end } = interval(p);
-    if (!start) continue;
+    const e = p.exercise;
+    const start = new Date(e.interval.startTime);
+    const end = new Date(e.interval.endTime);
+    const m = e.metricsSummary ?? {};
+    const distanceKey = Object.keys(m).find((k) => k.toLowerCase().includes("distance"));
+    const distanceRaw = distanceKey ? Number(m[distanceKey]) : null;
     const w: Workout = {
-      type: String(find(p, ["exerciseType", "activityName", "type"]) ?? "workout").toLowerCase(),
+      type: (e.displayName || e.exerciseType || "workout").toLowerCase(),
       start: start.toISOString(),
-      duration_min: end ? Math.round((end.getTime() - start.getTime()) / 60_000) : 0,
-      distance_km: (() => {
-        const m = toNum(find(p, ["distanceMeters", "distance"]));
-        return m != null ? Math.round((m > 1000 ? m / 1000 : m) * 10) / 10 : null;
-      })(),
-      avg_hr: toNum(find(p, ["averageHeartRate", "averageHeartRateBpm", "avgHeartRate"])),
+      duration_min: Math.round((seconds(e.activeDuration) || (end.getTime() - start.getTime()) / 1000) / 60),
+      distance_km:
+        distanceRaw == null ? null
+        : distanceKey!.toLowerCase().includes("millimeter") ? Math.round(distanceRaw / 1e5) / 10
+        : distanceKey!.toLowerCase().includes("meter") ? Math.round(distanceRaw / 100) / 10
+        : distanceRaw,
+      avg_hr: m.averageHeartRateBeatsPerMinute != null ? Number(m.averageHeartRateBeatsPerMinute) : null,
     };
     const key = localDate(start);
+    if (!byDate.has(key)) continue;
     workouts.set(key, [...(workouts.get(key) ?? []), w]);
   }
-  for (const [date, list] of workouts) {
-    const day = byDate.get(date);
-    if (day) day.workouts_json = JSON.stringify(list);
-  }
+  for (const [date, list] of workouts) byDate.get(date)!.workouts_json = JSON.stringify(list);
 
   return [...byDate.values()];
 }

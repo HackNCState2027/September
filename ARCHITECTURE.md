@@ -29,10 +29,10 @@ It uses the user's **real Google Health data** (Fitbit / Pixel Watch) and **Gemi
 | # | Beat | Presenter does | Audience sees |
 |---|---|---|---|
 | 1 | Hook (20s) | Says the problem line | — |
-| 2 | Memory builds live (45s) | Types: *"Training for a half-marathon in November. I'm allergic to peanuts. Knee's been sore since Sunday's long run, and I slept terribly last night."* | 4 cards animate onto the board, each in the right tier with a lifespan ring: 🔒 peanut allergy · 🎯 half-marathon Nov · 🌊 sore knee · 🌊 bad sleep |
+| 2 | Memory builds live (45s) | Types: *"Training for a half-marathon in November. I'm allergic to peanuts. My knee's been sore since my last long run, and work has been super stressful this week."* | 4 cards animate onto the board, each in the right tier with a lifespan ring: 🔒 peanut allergy · 🎯 half-marathon Nov · 🌊 sore knee · 🌊 stressful week |
 | 3 | Advice that respects memory (45s) | *"What should I do today, and what should I eat after?"* | Upper-body/easy day instead of a run, a snack without peanuts. Chips: `🔒 peanut allergy` `🌊 sore knee` `🎯 half-marathon` `📊 today` |
 | 4 | Context zooms out (30s) | *"How's my sleep been lately?"* | Trace shows `fetching sleep · last 7 days…`, answer with real numbers + a mini chart |
-| 5 | Fast-forward (45s) | Clicks **⏩ +7 days** | Bad-sleep card fades away. Knee card pulses amber, **coach messages first**: *"How's the knee?"* Presenter types *"All good now"* → knee card gets ✓ and slides to history. 🔒 and 🎯 cards don't move. |
+| 5 | Fast-forward (45s) | Clicks **⏩ +7 days** | Stressful-week card fades away. Knee card pulses amber, **coach messages first**: *"How's the knee?"* Presenter types *"All good now"* → knee card gets ✓ and slides to history. 🔒 and 🎯 cards don't move. |
 | 6 | Close (10s) | Says the one-liner | — |
 
 **Real vs. staged**
@@ -340,7 +340,7 @@ Plain TypeScript. **The LLM picks the category; code decides the lifespan.** Thi
 | | `checkin` for > 3 sim days with no answer | `faded` |
 | goal / core | always | `active` |
 
-With the demo script, **+7 days** gives: bad sleep (2d) → faded; knee (injury, 7d) → check-in; goal + core → unchanged. ✅
+With the demo script, **+7 days** gives: stressful week (5d) → faded; knee (injury, 7d) → check-in; goal + core → unchanged. ✅
 
 ### 8.6 Check-in (⑥)
 
@@ -450,7 +450,7 @@ USER_NAME=Alex
 | Memory board UI, lifespan rings, chips, trace, mini chart, fast-forward animation | ✅ built and checked in the browser |
 | Coach (streaming + tools) and memory builder (JSON) on Gemini | ✅ verified live: the full demo script plays end to end in the browser |
 | Check-in message | ✅ Gemini-written (verified), with a template fallback |
-| Google Health sync | ✅ written, ⏳ needs OAuth setup + `npm run google:dump` to confirm field names |
+| Google Health sync | ✅ verified with real data (Fitbit Air): 30 days of sleep, steps, resting HR, HRV, workouts. The API only has Fitbit/Pixel data (history from May 2026 here); older phone-only Google Fit history isn't available. The exercise type rejects filters, so it's filtered locally. |
 | Presenter helpers | Script buttons above the input fill in each demo line; double-click the data badge to load sample data |
 
 ## 13. Gaps found and how this doc resolves them
@@ -459,7 +459,7 @@ USER_NAME=Alex
 |---|---|---|
 | 1 | Team size / hours unknown | Plan split into 4 workstreams + milestones + cut list; merge streams for smaller teams |
 | 2 | Unknown whose watch/data we use | Sample data is first-class and built first; badge shows the source |
-| 3 | **Script vs. real data mismatch** (script says "Sunday's long run", "slept terribly"; real data may disagree) | Morning of demo: sync, look at the real last 7 days, **rewrite script lines to match reality**; or switch to sample data |
+| 3 | **Script vs. real data mismatch** (the original script said "slept terribly"; real data showed 7h52m) | Script changed to claims the data can't contradict ("last long run", "stressful week"). Still, on the morning of the demo: sync, look at the real last 7 days, **rewrite script lines to match reality**; or switch to sample data |
 | 4 | What "today" means after fast-forward | Health "today" = latest synced date; sim clock only ages memories |
 | 5 | LLM might pick a lifespan that breaks the +7-day beat | LLM picks a category; code owns lifespans (§8.5) |
 | 6 | Check-in must fire before a high-stakes memory vanishes | Check-in triggers at ≤30% strength *or* expiry; the memory can't fade until answered or 3 days pass |
