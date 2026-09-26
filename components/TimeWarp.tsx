@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 
 const fmt = (d: Date) => d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
-/** A quiet interstitial while the memory clock jumps forward. */
-export default function TimeWarp({ from, days }: { from: string; days: number }) {
+/** A quiet interstitial while the memory clock jumps forward (or back). */
+export default function TimeWarp({ from, days, back = false }: { from: string; days: number; back?: boolean }) {
   const reduce = useReducedMotion();
   const start = new Date(from + "T12:00:00");
   const [shown, setShown] = useState(reduce ? days : 0);
@@ -18,7 +18,7 @@ export default function TimeWarp({ from, days }: { from: string; days: number })
   }, [days, reduce]);
 
   const current = new Date(start);
-  current.setDate(current.getDate() + shown);
+  current.setDate(current.getDate() + (back ? -shown : shown));
 
   return (
     <motion.div
@@ -34,7 +34,7 @@ export default function TimeWarp({ from, days }: { from: string; days: number })
       <div className="text-center">
         <div className="tempo-eyebrow">Memory clock</div>
         <div className="tempo-display mt-3 text-[44px]">
-          {days === 7 ? "Seven" : days} days later.
+          {days === 7 ? "Seven" : days} days {back ? "earlier" : "later"}.
         </div>
         <div className="mt-4 font-serif text-[18px] tabular-nums text-ink-soft">{fmt(current)}</div>
         <div className="mx-auto mt-5 flex w-56 gap-1" aria-hidden>
@@ -42,7 +42,9 @@ export default function TimeWarp({ from, days }: { from: string; days: number })
             <div
               key={i}
               className="h-1 flex-1 rounded-full transition-colors duration-200"
-              style={{ background: i < shown ? "var(--tempo-coral)" : "var(--tempo-line)" }}
+              style={{
+                background: (back ? days - 1 - i < shown : i < shown) ? "var(--tempo-coral)" : "var(--tempo-line)",
+              }}
             />
           ))}
         </div>

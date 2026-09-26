@@ -102,6 +102,7 @@ export interface TodaySnapshot {
 export interface AppState {
   today: TodaySnapshot | null;
   sessionId: number;
+  canRewind: boolean;
   simDate: string;
   simOffsetDays: number;
   userName: string;

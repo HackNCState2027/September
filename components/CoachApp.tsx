@@ -51,7 +51,7 @@ export default function CoachApp() {
   const [highlightId, setHighlightId] = useState<number | null>(null);
   const [coachTyping, setCoachTyping] = useState(false);
   const [learning, setLearning] = useState(false);
-  const [warpFrom, setWarpFrom] = useState<string | null>(null);
+  const [warp, setWarp] = useState<{ from: string; back: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [input, setInput] = useState("");
@@ -171,7 +171,7 @@ export default function CoachApp() {
   async function fastForward() {
     if (busy || !meta) return;
     setBusy(true);
-    setWarpFrom(meta.simDate);
+    setWarp({ from: meta.simDate, back: false });
     try {
       const [res] = await Promise.all([
         fetch("/api/clock", {
@@ -183,7 +183,7 @@ export default function CoachApp() {
       ]);
       const { state } = (await res.json()) as { state: AppState };
       const { memories: nextMem, history: nextHist, messages: nextMsgs, ...rest } = state;
-      setWarpFrom(null);
+      setWarp(null);
       setMeta(rest);
       await sleep(600);
 
@@ -209,7 +209,31 @@ export default function CoachApp() {
         setMessages((list) => [...list, ...fresh]);
       }
     } finally {
-      setWarpFrom(null);
+      setWarp(null);
+      setBusy(false);
+    }
+  }
+
+  /** Undo the last fast-forward: faded memories return, the check-in disappears. */
+  async function rewind() {
+    if (busy || !meta?.canRewind) return;
+    setBusy(true);
+    setWarp({ from: meta.simDate, back: true });
+    try {
+      const [res] = await Promise.all([
+        fetch("/api/clock", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ days: -FAST_FORWARD_DAYS }),
+        }),
+        sleep(2000),
+      ]);
+      const json = await res.json();
+      setWarp(null);
+      if (json.state) applyState(json.state);
+      else flash(json.error ?? "Nothing to rewind");
+    } finally {
+      setWarp(null);
       setBusy(false);
     }
   }
@@ -296,9 +320,17 @@ export default function CoachApp() {
             </span>
           )}
           <button
+            onClick={rewind}
+            disabled={busy || !meta?.canRewind}
+            title={meta?.canRewind ? "Undo the last fast-forward" : "Available after a fast-forward"}
+            className="tempo-press ml-auto flex items-center gap-1.5 rounded-control border border-line bg-surface-strong px-3 py-1.5 text-[12px] font-semibold text-sage hover:border-sage disabled:opacity-40"
+          >
+            <ArrowIcon size={13} className="rotate-180" /> Back {FAST_FORWARD_DAYS} days
+          </button>
+          <button
             onClick={fastForward}
             disabled={busy || !meta}
-            className="tempo-button-primary ml-auto flex items-center gap-1.5 px-3.5 py-1.5 text-[12px] disabled:opacity-40"
+            className="tempo-button-primary flex items-center gap-1.5 px-3.5 py-1.5 text-[12px] disabled:opacity-40"
           >
             Fast-forward {FAST_FORWARD_DAYS} days <ArrowIcon size={13} />
           </button>
@@ -456,7 +488,9 @@ export default function CoachApp() {
           <span>{APP_NAME} · Gemini + Google Health</span>
         </footer>
 
-        <AnimatePresence>{warpFrom && <TimeWarp from={warpFrom} days={FAST_FORWARD_DAYS} />}</AnimatePresence>
+        <AnimatePresence>
+          {warp && <TimeWarp from={warp.from} days={FAST_FORWARD_DAYS} back={warp.back} />}
+        </AnimatePresence>
 
         <AnimatePresence>
           {toast && (

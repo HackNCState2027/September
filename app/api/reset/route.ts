@@ -1,6 +1,7 @@
 import { getDb, getStateValue, replaceDailyStats, setStateValue } from "@/lib/db";
 import { generateSampleData } from "@/lib/sampleData";
 import { getAppState } from "@/lib/state";
+import { clearSnapshots } from "@/lib/timeTravel";
 
 export async function POST() {
   const db = getDb();
@@ -9,6 +10,7 @@ export async function POST() {
   db.prepare("DELETE FROM sqlite_sequence WHERE name IN ('memories','messages')").run();
   setStateValue(db, "sim_offset_days", "0");
   setStateValue(db, "session_id", "1");
+  clearSnapshots();
   // Sample data is regenerated so "today" in the story is always the real today.
   if (getStateValue("data_source", db) !== "google_health") {
     replaceDailyStats(db, generateSampleData());

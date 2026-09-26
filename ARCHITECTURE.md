@@ -34,6 +34,7 @@ It uses the user's **real Google Health data** (Fitbit / Pixel Watch) and **Gemi
 | 3b | New conversation (20s) | Clicks **New conversation**, then *"What do you remember?"* | Empty chat, *"Welcome back, Ethan."* The coach lists what it knows with no chat history at all. This is the core problem solved: no re-explaining. |
 | 4 | Context zooms out (30s) | *"How's my sleep been lately?"* | Trace shows `fetching sleep · last 7 days…`, answer with real numbers + a mini chart |
 | 5 | Fast-forward (45s) | Clicks **⏩ +7 days** | Stressful-week card fades away. Knee card pulses amber, **coach messages first**: *"How's the knee?"* Presenter types *"All good now"* → knee card gets ✓ and slides to history. 🔒 and 🎯 cards don't move. |
+| – | Rehearsal helper | Clicks **← Back 7 days** | "Seven days earlier." Faded memories return and the check-in disappears, so beat 5 can be re-run without a full reset. |
 | 6 | Close (10s) | Says the one-liner | — |
 
 **Real vs. staged**
@@ -354,7 +355,8 @@ When `tick` moves memories to `checkin`, `checkin.ts` makes a small Gemini call:
 |---|---|---|
 | `GET /api/state` | `tick()`, then read everything | `{ simDate, userName, dataSource, lastSyncAt, memories[], history[], messages[] }` |
 | `POST /api/chat` `{text}` | Save user message → `tick()` → run **coach and memory builder in parallel** | **SSE stream** of events (below) |
-| `POST /api/clock` `{days: 7}` | `sim_offset_days += days` → `tick()` → maybe a check-in | `{ simDate, memories[], newMessages[] }` |
+| `POST /api/clock` `{days: 7}` | Save a snapshot → `sim_offset_days += days` → `tick()` → maybe a check-in | `{ state, checkinMessageId }` |
+| `POST /api/clock` `{days: -7}` | **Rewind:** restore the last snapshot (memories, conversation, clock). Undoes the fast-forward exactly; 400 if there is nothing to undo | `{ state }` |
 | `POST /api/sync` | Google Health → `daily_stats` | `{ days, source, lastSyncAt }` |
 | `POST /api/session` | Start a new conversation (`session_id += 1`). Memories and health data carry over | `AppState` |
 | `POST /api/reset` | Delete memories + messages, `sim_offset_days = 0`, `session_id = 1` (keeps `daily_stats`) | `AppState` |
